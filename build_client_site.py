@@ -8,7 +8,7 @@ Produces a directory with:
 
 Run:  python build_client_site.py
 """
-import os, csv, shutil, json, sqlite3, time
+import os, csv, shutil, json, sqlite3, time, sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MD_DIR = r"U:\GIS\temp\CS\RS\Nook\RF_Test\MD"
@@ -59,6 +59,12 @@ EXPECTED_SCORE_ROWS = 30850
 # BID+zone, computed upstream after the same reclassification) -- see
 # compute_zone_canopy_height() below.
 LC_CSV = os.path.join(SCRIPT_DIR, "BID_ZID_LC_20260501.csv")
+
+# Cached output of the two passes over BID_ZID_LC_20260501.csv (432 MB, not committed).
+# The cache is small (a few MB), committed, and is what the build normally reads. Pass
+# --refresh-lc-cache to rebuild it from the CSV (needed only if the CSV changes).
+LC_CACHE = os.path.join(SCRIPT_DIR, "data_cache", "lc_derived_20260501.json")
+REFRESH_LC_CACHE = False  # set by main() from --refresh-lc-cache
 ZONE_TO_IDX = {"50": 0, "100": 1, "300": 2, "hmz": 3, "hmz300": 4}
 RECLASS_MAX_HT = 12.0  # ForestHeight <= this (and > 0) with non-null Composition -> not Forest
 
@@ -263,6 +269,45 @@ def compute_zone_canopy_height(csv_path, waterbody_bids):
     print(f"    LC pass 2: {n_rows:,} rows, {n_forest:,} Forest polygons "
           f"({n_reclassed:,} reclassified away) in {time.time()-t0:.1f}s total")
     return sums
+
+def load_or_compute_lc_derived(refresh=False):
+    """Return (waterbody_bids, waterbody_out, canopy_sums) from LC_CACHE, computing
+    them from LC_CSV (and writing the cache) when the cache is missing or refresh=True.
+    Shapes are identical to compute_waterbody_data()/compute_zone_canopy_height()."""
+    if not refresh and os.path.isfile(LC_CACHE):
+        with open(LC_CACHE, "r", encoding="utf-8") as f:
+            c = json.load(f)
+        waterbody_bids = set(c["waterbody_bids"])
+        waterbody_out = c["waterbody_out"]
+        canopy_sums = {}
+        for k, v in c["canopy_sums"].items():
+            bid, z = k.rsplit("|", 1)
+            canopy_sums[(bid, int(z))] = v
+        print(f"    LC derived data loaded from cache {os.path.relpath(LC_CACHE, SCRIPT_DIR)} "
+              f"(source {c.get('source')}, {len(waterbody_out):,} waterbody rows, "
+              f"{len(canopy_sums):,} canopy keys)")
+        return waterbody_bids, waterbody_out, canopy_sums
+
+    if not os.path.isfile(LC_CSV):
+        raise RuntimeError(
+            f"Landcover CSV not found at {LC_CSV} and no cache at {LC_CACHE} "
+            "(or --refresh-lc-cache was requested). Restore the CSV or the cache."
+        )
+    waterbody_bids, waterbody_out = compute_waterbody_data(LC_CSV)
+    canopy_sums = compute_zone_canopy_height(LC_CSV, waterbody_bids)
+    os.makedirs(os.path.dirname(LC_CACHE), exist_ok=True)
+    payload = {
+        "source": os.path.basename(LC_CSV),
+        "source_bytes": os.path.getsize(LC_CSV),
+        "waterbody_bids": sorted(waterbody_bids),
+        "waterbody_out": waterbody_out,
+        "canopy_sums": {f"{bid}|{z}": v for (bid, z), v in canopy_sums.items()},
+    }
+    with open(LC_CACHE, "w", encoding="utf-8") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    print(f"    LC derived data written to cache {os.path.relpath(LC_CACHE, SCRIPT_DIR)} "
+          f"({os.path.getsize(LC_CACHE)/1e6:.1f} MB)")
+    return waterbody_bids, waterbody_out, canopy_sums
 
 # --- Output ---
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "site")
@@ -548,8 +593,7 @@ def build_sqlite(bid_json_path, sqlite_path):
     Z_SQFT, Z_COMP, Z_HT = 9, 10, 11
     SCORED_ZONES = 5  # indices 0-4; index 5 is the channel/lake zone, excluded
 
-    waterbody_bids_set, waterbody_out = compute_waterbody_data(LC_CSV)
-    canopy_sums = compute_zone_canopy_height(LC_CSV, waterbody_bids_set)
+    waterbody_bids_set, waterbody_out, canopy_sums = load_or_compute_lc_derived(refresh=REFRESH_LC_CACHE)
 
     bid_rows = []
     zone_rows = []
@@ -751,6 +795,9 @@ def build_sqlite(bid_json_path, sqlite_path):
 
 
 def main():
+    global REFRESH_LC_CACHE
+    REFRESH_LC_CACHE = "--refresh-lc-cache" in sys.argv
+
     t_start = time.time()
     print("Building multi-file dashboard site...")
     print(f"  Output: {OUTPUT_DIR}")
