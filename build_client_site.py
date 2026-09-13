@@ -954,7 +954,10 @@ def main():
     with open(os.path.join(vendor_src, "MANIFEST.json"), encoding="utf-8") as f:
         manifest = json.load(f)
     for name in manifest:
-        shutil.copy2(os.path.join(vendor_src, name), os.path.join(OUTPUT_DIR, "vendor", name))
+        src = os.path.join(vendor_src, name)
+        if not os.path.isfile(src):
+            raise RuntimeError(f"vendor/{name} is missing -- run `python tools/fetch_vendor.py`")
+        shutil.copy2(src, os.path.join(OUTPUT_DIR, "vendor", name))
     print(f"  Copied {len(manifest)} vendor files")
 
     # --- Write index.html ---
