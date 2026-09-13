@@ -224,7 +224,7 @@
     };
 
     // One landcover set for the whole app (Bank Explorer grid, Scoring Lab grid, Summary Stats
-    // stack, every legend). Index = landcover class index used by zone arrays and zone_stats.
+    // stack, every legend). Index = landcover class index used by zone arrays and the zones table.
     const LC9 = [
       { key: 'Forest',                   color: '#264914' },
       { key: 'Shrub/Woodland',           color: '#C6A871' },
@@ -1498,9 +1498,17 @@
     function sqlQueryBidZones(db, bid) {
       try {
         if (!db || !bid) return null;
-        const r = db.exec("SELECT zone_idx, data FROM zones WHERE bid = $bid ORDER BY zone_idx", { $bid: bid });
+        // Rebuilds the zone arrays the panels consume:
+        //   scored zones 0-4: [lc0..lc8, sqft, comp, ht, den, zrp, comp_std]  (15 values)
+        //   channel zone 5:   [lc0..lc8, sqft]                                  (10 values)
+        const r = db.exec(
+          "SELECT z, sqft, lc0, lc1, lc2, lc3, lc4, lc5, lc6, lc7, lc8, comp, ht, den, zrp, cstd " +
+          "FROM zones WHERE bid = $bid ORDER BY z", { $bid: bid });
         const zones = [null, null, null, null, null, null];
-        if (r.length) r[0].values.forEach(([idx, data]) => { zones[idx] = JSON.parse(data); });
+        if (r.length) r[0].values.forEach(([z, sqft, ...rest]) => {
+          const lc = rest.slice(0, 9), tail = rest.slice(9);
+          zones[z] = z === 5 ? [...lc, sqft] : [...lc, sqft, ...tail];
+        });
         return zones;
       } catch (e) { console.error('sqlQueryBidZones error:', e); return null; }
     }
@@ -2443,8 +2451,7 @@
         clauses.push(`(wt IS NOT NULL AND wt IN (${raws.map(esc).join(',')}))`);
       }
       // S-curve columns throughout: rpsf/rpsa are the canonical scores (the tiers and
-      // the Composite Index are built on them). The linear rpf/rpa columns remain in
-      // the database but are not surfaced anywhere in this client build.
+      // the Composite Index are built on them).
       addRange('rpsf', f.rRPF);
       addRange('rpsa', f.rRPA);
       addRange('mc', f.rComp);
@@ -2522,20 +2529,21 @@
     // Interpolating user text into any of these is a SQL-injection hole that
     // will not announce itself: sql.js runs it happily and returns wrong rows.
     //
-    // Join note: `bids` and `zone_stats` share exactly two column names, `bid`
+    // Join note: `bids` and `zones` share exactly two column names, `bid`
     // and `sqft`. compByZone/lcByZone join both tables, so a `where` fragment
     // that bare-references either would throw "ambiguous column name" at
     // runtime. Qualify them (b.sqft / s.sqft) if such a filter is ever added.
     //
     // compByZone note: `comp` (forest composition, -1..+1) is a FOREST-ONLY metric, but
-    // 0.0 also doubles as the sentinel `zone_stats` uses for "this zone has no forest at
+    // 0.0 also doubles as the sentinel the zones table uses for "this zone has no forest at
     // all". Weighting it by total zone area (s.sqft) let forest-free zones vote as if
     // they were measured "perfectly mixed forest" and dragged the whole aggregate toward
     // 0 - averaged over the actual WRIA data this flips the sign of the watershed mean.
-    // The aggregate below instead weights by s.lc0_sqft (lc0 = Forest, per the landcover
-    // class layout already used by lcByZone), so a zone with zero forest area contributes
-    // zero weight and drops out on its own; it also returns SUM(s.lc0_sqft) as forestSqft
-    // so callers (toHeat) can render "no forest in this zone" instead of a fabricated 0.
+    // The aggregate below instead weights by s.lc0 * s.sqft (lc0 = Forest proportion, per
+    // the landcover class layout already used by lcByZone), so a zone with zero forest area
+    // contributes zero weight and drops out on its own; it also returns SUM(s.lc0 * s.sqft)
+    // as forestSqft so callers (toHeat) can render "no forest in this zone" instead of a
+    // fabricated 0.
     // ---------------------------------------------------------------
     // Summary Stats query layer.
     // Every function takes (db, where) where `where` is the SQL fragment from
@@ -2600,21 +2608,21 @@
       return counts.map((n, i) => ({ x0: min + i * w, x1: min + (i + 1) * w, n }));
     };
 
-    // Buffer-zone gate. `zones` is a Set of zone indices 0-4 (or null for all).
-    // Restricts which buffer zones the zone-level aggregates cover; it does NOT
-    // change which BIDs are selected, since a buffer zone is a slice within a
-    // reach rather than a property of it.
+    // Buffer-zone gate. `zones` is a Set of zone indices 0-4 (or null for all). The channel
+    // zone (z = 5) lives in the same table and must never enter a buffer-zone aggregate,
+    // so the default is `s.z <= 4`, not `1`.
     const zoneClause = (zones) => (!zones || zones.size === 0 || zones.size >= 5)
-      ? '1'
+      ? 's.z <= 4'
       : `s.z IN (${[...zones].map(Number).filter(n => n >= 0 && n <= 4).join(',') || '-1'})`;
 
+    // lc0 is the Forest PROPORTION; forest area = s.lc0 * s.sqft.
     const statsCompByZone = (db, where, groupExpr, zones) => rowsOf(db, `
         SELECT ${groupExpr} AS k, s.z,
-               SUM(s.comp * s.lc0_sqft) / NULLIF(SUM(s.lc0_sqft),0),
+               SUM(s.comp * s.lc0 * s.sqft) / NULLIF(SUM(s.lc0 * s.sqft),0),
                SUM(s.ht   * s.sqft) / NULLIF(SUM(s.sqft),0),
-               SUM(s.cht  * s.lc0_sqft) / NULLIF(SUM(s.lc0_sqft),0),
-               SUM(s.sqft), SUM(s.lc0_sqft)
-        FROM zone_stats s JOIN bids b ON b.bid = s.bid
+               SUM(s.cht  * s.lc0 * s.sqft) / NULLIF(SUM(s.lc0 * s.sqft),0),
+               SUM(s.sqft), SUM(s.lc0 * s.sqft)
+        FROM zones s JOIN bids b ON b.bid = s.bid
         WHERE ${where} AND ${zoneClause(zones)} GROUP BY k, s.z ORDER BY k, s.z`
       ).map(([key, z, comp, ht, cht, sqft, forestSqft]) => ({
         key: (key === null || key === '') ? 'Unknown' : String(key),
@@ -2622,10 +2630,10 @@
       }));
 
     const statsLcByZone = (db, where, zones) => {
-      const lcSel = Array.from({ length: 9 }, (_, i) => `SUM(s.lc${i}_sqft)`).join(', ');
+      const lcSel = Array.from({ length: 9 }, (_, i) => `SUM(s.lc${i} * s.sqft)`).join(', ');
       return rowsOf(db, `
         SELECT s.z, SUM(s.sqft), ${lcSel}
-        FROM zone_stats s JOIN bids b ON b.bid = s.bid
+        FROM zones s JOIN bids b ON b.bid = s.bid
         WHERE ${where} AND ${zoneClause(zones)} GROUP BY s.z ORDER BY s.z`
       ).map(v => {
         const sqft = v[1] || 0;
@@ -3216,7 +3224,7 @@
           WHEN mc < 0.5 THEN 'Conifer Dom.'
           ELSE 'Strong Conifer' END`;
         const dr = db.exec(
-          `SELECT bid, str, rpf, rpa, ROUND(rpsf * rpsa / 100.0, 1) AS ci,
+          `SELECT bid, str, ROUND(rpsf * rpsa / 100.0, 1) AS ci,
                   tier, srz, ${compDescSql} AS compDesc, mc, mh, pf, ps, ph, sols, slps, wet, mgr,
                   cx, cy, rpsf, rpsa,
                   chk, fish, bfw, hmz, zon, jur,

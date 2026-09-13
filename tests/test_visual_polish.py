@@ -147,7 +147,7 @@ def main():
     check(len(re.findall(r"bg-white rounded-lg shadow", HTML)) == 0, "no leftover Tailwind card recipe")
 
     # --- Task 11: composition heatmap fix (forest-area weighting, no-forest band) ---
-    present("SUM(s.comp * s.lc0_sqft)", "composition aggregate weighted by forest area (lc0_sqft)")
+    present("SUM(s.comp * s.lc0 * s.sqft)", "composition aggregate weighted by forest area (lc0 * sqft)")
     absent("SUM(s.comp * s.sqft)", "old total-area-weighted composition aggregate removed")
     present("no forest", "no-forest wording present (legend/tooltip)")
 

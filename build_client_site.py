@@ -42,7 +42,7 @@ EXPECTED_SCORE_ROWS = 30850
 
 # BID_ZID_LC_20260501.csv -- polygon-level landcover source (596,981 rows, ~432 MB).
 #
-# Why this exists: zone_stats.ht (shipped as the "Canopy height by buffer zone" chart)
+# Why this exists: zones.ht (shipped as the "Canopy height by buffer zone" chart)
 # is mean(ForestHeight) computed upstream, but ForestHeight is a full-polygon mean
 # ("NOT tree-only" per the methods doc) -- averaging it in is fine for the intactness
 # score, which is a full-polygon concept, but wrong for a chart labeled "Canopy height",
@@ -54,8 +54,8 @@ EXPECTED_SCORE_ROWS = 30850
 #   1. the Forest -> Shrub/Woodland reclassification for any polygon with non-null
 #      Composition AND 0 < ForestHeight <= 12 ft (lines ~271-279)
 #   2. the Waterbody BID exclusion (PositionWaterbody == "Waterbody", lines ~322-329)
-#   3. the Zone string -> zone_stats.z integer mapping (ZONE_ORDER, lines 35-36)
-# The result is validated against the existing zone_stats.lc0_sqft (Forest area per
+#   3. the Zone string -> zones.z integer mapping (ZONE_ORDER, lines 35-36)
+# The result is validated against the existing zones.lc0 * sqft (Forest area per
 # BID+zone, computed upstream after the same reclassification) -- see
 # compute_zone_canopy_height() below.
 LC_CSV = os.path.join(SCRIPT_DIR, "BID_ZID_LC_20260501.csv")
@@ -134,7 +134,7 @@ def compute_waterbody_data(csv_path):
     """Stream BID_ZID_LC_20260501.csv once and return (waterbody_bids, waterbody_out):
       waterbody_bids -- set of BIDs with any PositionWaterbody == "Waterbody" row
                         (used by compute_zone_canopy_height to exclude those BIDs
-                        from the scored zone_stats).
+                        from the scored zones rows).
       waterbody_out  -- {bid: {"rid": str, "lc": [9 proportions], "sqft": int, "wt": str}}
                         per-BID in-channel landcover, built directly from this CSV.
 
@@ -202,7 +202,7 @@ def compute_waterbody_data(csv_path):
         }
 
     print(f"    LC pass 1: {len(waterbody_bids):,} waterbody BIDs excluded from "
-          f"zone_stats; {len(waterbody_out):,} waterbody_bids rows built "
+          f"the scored zones rows; {len(waterbody_out):,} waterbody_bids rows built "
           f"({time.time()-t0:.1f}s)")
     return waterbody_bids, waterbody_out
 
@@ -210,7 +210,7 @@ def compute_waterbody_data(csv_path):
 def compute_zone_canopy_height(csv_path, waterbody_bids):
     """Stream BID_ZID_LC_20260501.csv and return {(bid, z): (sum_h_sqft, sum_sqft)}
     for Forest polygons only, plus the same per (bid, z) Forest SQFT total for
-    validation against the upstream zone_stats.lc0_sqft.
+    validation against the upstream zones.lc0 * sqft.
 
     `waterbody_bids` (from compute_waterbody_data) is the set of BIDs to exclude.
     """
@@ -235,7 +235,7 @@ def compute_zone_canopy_height(csv_path, waterbody_bids):
             n_rows += 1
             z = ZONE_TO_IDX.get(row[zone_i])
             if z is None:
-                continue  # river/lake (or unrecognized) zone -- excluded from zone_stats
+                continue  # river/lake (or unrecognized) zone -- excluded from scored zones
             bid = row[bid_i]
             if bid in waterbody_bids:
                 continue
@@ -519,7 +519,7 @@ def build_sqlite(bid_json_path, sqlite_path):
         CREATE TABLE bids (
             bid TEXT PRIMARY KEY,
             rid TEXT,
-            rp REAL, rpf REAL, sol REAL, slp REAL, wet REAL,
+            wet REAL,
             tier TEXT, srz TEXT, fish TEXT, chk TEXT, mgr TEXT,
             bfw TEXT, bft REAL, hmz INTEGER, zon TEXT,
             cua TEXT, jur TEXT,
@@ -531,25 +531,24 @@ def build_sqlite(bid_json_path, sqlite_path):
             asp REAL, af REAL,
             str TEXT, ss INTEGER, zc INTEGER, pc INTEGER, dom TEXT, wt TEXT,
             cx REAL, cy REAL, pf REAL, ps REAL, ph REAL,
-            mc REAL, mh REAL, rpa REAL, rpsf REAL, rpsa REAL,
+            mc REAL, mh REAL, rpsf REAL, rpsa REAL,
             sqft REAL,
             rpsn REAL, sols REAL, slps REAL
         )
     """)
+    # One zone table. lc0..lc8 are landcover PROPORTIONS (area = lcN * sqft). Zones 0-4 are
+    # the scored buffer zones; z = 5 is the channel/lake zone and carries NULL comp..cht.
+    # It replaces the old JSON-text `zones.data` column and the derived per-zone-area
+    # stats table, which duplicated the same numbers as areas. cht is the forest-area-weighted canopy
+    # height computed from the landcover CSV (see compute_zone_canopy_height).
     conn.execute("""
         CREATE TABLE zones (
-            bid TEXT, zone_idx INTEGER, data TEXT,
-            PRIMARY KEY (bid, zone_idx)
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE zone_stats (
-            bid TEXT, z INTEGER, sqft REAL,
-            lc0_sqft REAL, lc1_sqft REAL, lc2_sqft REAL, lc3_sqft REAL, lc4_sqft REAL,
-            lc5_sqft REAL, lc6_sqft REAL, lc7_sqft REAL, lc8_sqft REAL,
-            comp REAL, ht REAL, cht REAL,
+            bid TEXT NOT NULL, z INTEGER NOT NULL, sqft REAL,
+            lc0 REAL, lc1 REAL, lc2 REAL, lc3 REAL, lc4 REAL,
+            lc5 REAL, lc6 REAL, lc7 REAL, lc8 REAL,
+            comp REAL, ht REAL, den REAL, zrp REAL, cstd REAL, cht REAL,
             PRIMARY KEY (bid, z)
-        )
+        ) WITHOUT ROWID
     """)
     conn.execute("""
         CREATE TABLE waterbody_bids (
@@ -564,7 +563,7 @@ def build_sqlite(bid_json_path, sqlite_path):
     # Field order matching the CREATE TABLE
     attr_keys = [
         'rid',
-        'rp', 'rpf', 'sol', 'slp', 'wet',
+        'wet',
         'tier', 'srz', 'fish', 'chk', 'mgr',
         'bfw', 'bft', 'hmz', 'zon',
         'cua', 'jur',
@@ -573,7 +572,7 @@ def build_sqlite(bid_json_path, sqlite_path):
         'asp', 'af',
         'str', 'ss', 'zc', 'pc', 'dom', 'wt',
         'cx', 'cy', 'pf', 'ps', 'ph',
-        'mc', 'mh', 'rpa',
+        'mc', 'mh',
     ]
     bool_keys = {'hmz', 'ti', 'fi', 'si', 'ai', 'sal'}
     # +1 bid, +1 sqft, +5 rpsn/sols/slps/rpsf/rpsa (all from SCORES_CSV, one source)
@@ -597,7 +596,6 @@ def build_sqlite(bid_json_path, sqlite_path):
 
     bid_rows = []
     zone_rows = []
-    zone_stat_rows = []
     # Validation: my Forest SQFT per (bid, z) vs. the upstream lc0_sqft (also Forest
     # area, computed after the same reclassification) -- see spec section on the
     # three replicated rules. A poor match means one of them is wrong.
@@ -621,9 +619,11 @@ def build_sqlite(bid_json_path, sqlite_path):
         for i, z in enumerate(zones):
             if z is None:
                 continue
-            # zones table (JSON, unchanged) keeps every zone including the channel
-            zone_rows.append((bid, i, json.dumps(z)))
             if i >= SCORED_ZONES or len(z) <= Z_HT:
+                # Channel/lake zone: [lc0..lc8, sqft] only.
+                zone_rows.append((bid, i, float(z[Z_SQFT] or 0.0),
+                                  *[float(z[k] or 0.0) for k in range(9)],
+                                  None, None, None, None, None, None))
                 continue
             z_sqft = float(z[Z_SQFT] or 0.0)
             total_sqft += z_sqft
@@ -689,10 +689,12 @@ def build_sqlite(bid_json_path, sqlite_path):
                 if abs(expected_lc0 - lc0_sqft) < 1.0:
                     match_rounding_aware += 1
 
-            zone_stat_rows.append((
+            zone_rows.append((
                 bid, i, z_sqft,
-                *[float(z[k] or 0.0) * z_sqft for k in range(9)],
-                float(z[Z_COMP] or 0.0), float(z[Z_HT] or 0.0), cht,
+                *[float(z[k] or 0.0) for k in range(9)],
+                float(z[Z_COMP] or 0.0), float(z[Z_HT] or 0.0),
+                float(z[12] or 0.0), float(z[13] or 0.0), float(z[14] or 0.0),
+                cht,
             ))
 
         vals = [bid]
@@ -705,7 +707,7 @@ def build_sqlite(bid_json_path, sqlite_path):
         vals.append(rpsf)
         vals.append(rpsa)
         vals.append(total_sqft)
-        vals.extend([rpsn, sols, slps])
+        vals.extend([rpsn, round(sols, 3), round(slps, 3)])
         bid_rows.append(vals)
 
     # Fix 1: GIS-authoritative fish-access override + tier recompute (includes
@@ -713,11 +715,7 @@ def build_sqlite(bid_json_path, sqlite_path):
     fish_override_summary = apply_fish_override_and_retier(bid_rows, attr_keys, FISH_OVERRIDE_CSV)
 
     conn.executemany(f"INSERT INTO bids VALUES ({placeholders})", bid_rows)
-    conn.executemany("INSERT INTO zones VALUES (?,?,?)", zone_rows)
-    conn.executemany(
-        "INSERT INTO zone_stats VALUES (" + ",".join(["?"] * 15) + ")",
-        zone_stat_rows,
-    )
+    conn.executemany("INSERT INTO zones VALUES (" + ",".join(["?"] * 18) + ")", zone_rows)
 
     # Waterbody (in-channel) BIDs -- Fix 2: built directly from BID_ZID_LC_20260501.csv
     # (waterbody_out, from compute_waterbody_data above) rather than trusting the
@@ -731,22 +729,15 @@ def build_sqlite(bid_json_path, sqlite_path):
     if wb_rows:
         conn.executemany("INSERT INTO waterbody_bids VALUES (?,?,?,?,?)", wb_rows)
 
-    # Indexes
-    conn.execute("CREATE INDEX idx_tier ON bids(tier)")
-    conn.execute("CREATE INDEX idx_srz ON bids(srz)")
-    conn.execute("CREATE INDEX idx_rpf ON bids(rpf)")
-    conn.execute("CREATE INDEX idx_bfw ON bids(bfw)")
-    conn.execute("CREATE INDEX idx_fish ON bids(fish)")
-    conn.execute("CREATE INDEX idx_rid ON bids(rid)")
-    conn.execute("CREATE INDEX idx_wb_rid ON waterbody_bids(rid)")
-    conn.execute("CREATE INDEX idx_zs_z ON zone_stats(z)")
-
+    # No secondary indexes: every dashboard query is a filtered scan or GROUP BY over
+    # 30,850 rows (~1 ms either way); the six old indexes cost 3.25 MB of download.
     conn.commit()
+    conn.execute("VACUUM")
 
     # Verify
     count = conn.execute("SELECT COUNT(*) FROM bids").fetchone()[0]
     zone_count = conn.execute("SELECT COUNT(*) FROM zones").fetchone()[0]
-    zs_count = conn.execute("SELECT COUNT(*) FROM zone_stats").fetchone()[0]
+    zs_count = conn.execute("SELECT COUNT(*) FROM zones WHERE z <= 4").fetchone()[0]
     wb_count = conn.execute("SELECT COUNT(*) FROM waterbody_bids").fetchone()[0]
     acres = conn.execute("SELECT SUM(sqft)/43560.0 FROM bids").fetchone()[0]
     s_track_count = conn.execute(
@@ -756,7 +747,7 @@ def build_sqlite(bid_json_path, sqlite_path):
     conn.close()
 
     sz_mb = os.path.getsize(sqlite_path) / (1024 * 1024)
-    print(f"    {count} BIDs, {zone_count} zone rows, {zs_count} zone_stats rows, "
+    print(f"    {count} BIDs, {zone_count} zone rows (all), {zs_count} scored zone rows, "
           f"{wb_count} waterbody_bids rows, {acres:,.0f} acres, {sz_mb:.1f} MB in {time.time()-t0:.1f}s")
     print(f"    S-track join: {s_track_count}/{count} BIDs got rpsn/sols/slps/rpsf/rpsa from {os.path.basename(SCORES_CSV)}")
     print(f"    Fix 2 (waterbody_bids NaN groupby): {wb_count} rows shipped "
@@ -774,7 +765,7 @@ def build_sqlite(bid_json_path, sqlite_path):
           f"<1 sqft once our exact Forest sqft is put through that same rounding step")
     if match_pct_rounded < 99.0:
         raise RuntimeError(
-            f"zone_stats.cht Forest-SQFT validation match rate {match_pct_rounded:.2f}% "
+            f"zones.cht Forest-SQFT validation match rate {match_pct_rounded:.2f}% "
             "(rounding-aware) is below 99% -- one of the reclassification/waterbody/"
             "zone-mapping rules replicated from preprocess_dashboard.py does not match. "
             "Aborting rather than shipping a mismatched canopy-height aggregate."

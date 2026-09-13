@@ -12,10 +12,10 @@ print("byTier:", c.execute(
     "SELECT tier, COUNT(*), ROUND(SUM(sqft)/43560.0,2) FROM bids"
     " GROUP BY tier ORDER BY SUM(sqft) DESC").fetchall())
 print("compByZone(all):", c.execute(
-    "SELECT z, ROUND(SUM(comp*sqft)/SUM(sqft),4), ROUND(SUM(ht*sqft)/SUM(sqft),3)"
-    " FROM zone_stats GROUP BY z ORDER BY z").fetchall())
+    "SELECT z, ROUND(SUM(comp*lc0*sqft)/SUM(lc0*sqft),4), ROUND(SUM(ht*sqft)/SUM(sqft),3)"
+    " FROM zones WHERE z <= 4 GROUP BY z ORDER BY z").fetchall())
 print("lcByZone z=0 forest frac:", c.execute(
-    "SELECT ROUND(SUM(lc0_sqft)/SUM(sqft),4) FROM zone_stats WHERE z=0").fetchone())
+    "SELECT ROUND(SUM(lc0*sqft)/SUM(sqft),4) FROM zones WHERE z=0").fetchone())
 print("salmon Coho n, acres:", c.execute(
     "SELECT COUNT(*), ROUND(SUM(sqft)/43560.0,2) FROM bids"
     " WHERE sps LIKE '%Coho%'").fetchone())

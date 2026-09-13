@@ -52,6 +52,17 @@ def main():
     ).fetchone()[0]
     check(non_null == 30850, f"rpsn/sols/slps are non-null on all 30850 rows (got {non_null})")
 
+    for c in ("rp", "rpf", "sol", "slp", "rpa"):
+        check(c not in cols, f"legacy linear column {c} is gone from bids")
+    idx = [r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")]
+    check(idx == [], f"no secondary indexes ship (found {idx})")
+    long_dp = conn.execute(
+        "SELECT COUNT(*) FROM bids WHERE ROUND(sols, 3) != sols OR ROUND(slps, 3) != slps").fetchone()[0]
+    check(long_dp == 0, f"sols/slps rounded to 3 dp (got {long_dp} rows with more)")
+    db_mb = os.path.getsize(os.path.join(SITE, "data", "bids.sqlite")) / 1e6
+    check(db_mb < 22, f"bids.sqlite under 22 MB raw (got {db_mb:.1f} MB)")
+
     rows = conn.execute("SELECT bid, rpsn, sols, slps, wet, rpsf FROM bids").fetchall()
     checked = 0
     worst_dev = 0.0
@@ -100,8 +111,8 @@ def main():
     check(wb_count == 1224, f"waterbody_bids has 1224 rows (got {wb_count})")
 
     # --- Fix 3: no negative canopy heights ship ---
-    cht_min = conn.execute("SELECT MIN(cht) FROM zone_stats WHERE cht IS NOT NULL").fetchone()[0]
-    check(cht_min >= 0, f"zone_stats.cht has no negative values (min={cht_min})")
+    cht_min = conn.execute("SELECT MIN(cht) FROM zones WHERE cht IS NOT NULL").fetchone()[0]
+    check(cht_min >= 0, f"zones.cht has no negative values (min={cht_min})")
 
     conn.close()
     print("\nAll build-output checks passed.")
