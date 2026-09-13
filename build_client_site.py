@@ -849,6 +849,8 @@ NODE_MODULES = os.path.join(SCRIPT_DIR, "node_modules")
 
 
 def _require_node_toolchain():
+    if shutil.which("node") is None:
+        raise RuntimeError("`node` is not on PATH -- install Node 24 (the build compiles JSX and Tailwind CSS with it).")
     if not os.path.isdir(NODE_MODULES):
         raise RuntimeError("node_modules/ missing -- run `npm install` in Final_Build once (build-time Babel + Tailwind).")
 

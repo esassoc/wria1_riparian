@@ -61,8 +61,20 @@ def main():
           "static stylesheet contains the responsive-variant utility the page uses")
     check("React.createElement(" in _shipped, "JSX compiled to React.createElement calls")
     _compiled = _shipped.split('<script>\n', 1)[-1].rsplit('\n</script>', 1)[0]
-    check(_shipped.count('<script>\n') == 1 and "</script" not in _compiled,
+    check(_shipped.count('<script>\n') == 1,
+          "exactly one <script>\\n in the shipped page, so the split below isolates the compiled block")
+    check("</script" not in _compiled,
           "compiled JS carries no stray </script> that would truncate the block")
+
+    # Task 5: tailwind.config.js must mirror the page's inline theme, or a colour added to
+    # one and not the other ships unstyled with no error.
+    _src = open(os.path.join(ROOT, "client_dashboard.html"), encoding="utf-8").read()
+    _inline = _re.search(r"tailwind\.config = \{(.*?)\};", _src, _re.S).group(1)
+    _cfg = open(os.path.join(ROOT, "tailwind.config.js"), encoding="utf-8").read()
+    _norm = lambda s: _re.sub(r"\s+", "", s)
+    check(_norm(_inline[_inline.find("colors:"):_inline.find("}}")]) ==
+          _norm(_cfg[_cfg.find("colors:"):_cfg.rfind("}}")]),
+          "tailwind.config.js mirrors the page's inline theme (colors + fontFamily)")
 
     html = html_text()
     check(f"const DB_URL = 'data/{gz_name}'" in html, "DB_URL points at the hashed gz file")
