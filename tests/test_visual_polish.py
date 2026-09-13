@@ -1,8 +1,10 @@
-"""Static assertions for the visual polish pass. Run: python tests/test_visual_polish.py"""
+"""Static assertions for the visual polish pass, run against the JSX source
+(client_dashboard.html). Shipped-page checks live in test_build_output.py.
+Run: python tests/test_visual_polish.py"""
 import os, re, sys
 
-SITE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "site")
-HTML = open(os.path.join(SITE, "index.html"), encoding="utf-8").read()
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HTML = open(os.path.join(ROOT, "client_dashboard.html"), encoding="utf-8").read()
 
 def check(cond, msg):
     if not cond:
@@ -10,10 +12,10 @@ def check(cond, msg):
     print(f"  ok: {msg}")
 
 def absent(needle, msg=None):
-    check(needle not in HTML, msg or f"'{needle}' absent from shipped page")
+    check(needle not in HTML, msg or f"'{needle}' absent from client_dashboard.html")
 
 def present(needle, msg=None):
-    check(needle in HTML, msg or f"'{needle}' present in shipped page")
+    check(needle in HTML, msg or f"'{needle}' present in client_dashboard.html")
 
 def check_no_mojibake():
     """A JS escape written as JSX *text* (outside any string literal) ships as the literal
@@ -143,7 +145,8 @@ def main():
               f"escaped emoji {esc} absent (renders at runtime, invisible to a literal scan)")
     check(HTML.count("window.open(window.location.pathname + '#bid/'") >= 1, "deep-link handler present")
     check(re.search(r"Methodology|MethodsSection|ModelReference|__db_for_test", HTML) is None, "no internal content")
-    check(not os.path.isdir(os.path.join(SITE, "images")), "site/images/ does not exist")
+    # (the site/images/ filesystem check moved to test_build_output.py -- it is about the
+    #  shipped tree, not the JSX source; that suite already asserts "no images/ dir".)
     check(len(re.findall(r"bg-white rounded-lg shadow", HTML)) == 0, "no leftover Tailwind card recipe")
 
     # --- Task 11: composition heatmap fix (forest-area weighting, no-forest band) ---

@@ -47,6 +47,23 @@ def main():
     check("react.development" not in html_text(),
           "React production build is used, not development")
 
+    # --- Task 5: JSX and Tailwind are compiled at build time, not in the browser ---
+    _shipped = html_text()
+    check('type="text/babel"' not in _shipped, "shipped page has no in-browser Babel script block")
+    check("babel.min.js" not in _shipped and "@babel/standalone" not in _shipped,
+          "shipped page does not load Babel")
+    check("cdn.tailwindcss.com" not in _shipped, "shipped page does not load the Tailwind runtime")
+    check("tailwind.config" not in _shipped, "no inline tailwind.config in shipped page")
+    check('<style id="tw">' in _shipped, "static Tailwind stylesheet inlined")
+    check(".grid-cols-5{" in _shipped or ".grid-cols-5 {" in _shipped,
+          "static stylesheet contains a utility the page uses")
+    check(r".lg\:grid-cols-4{" in _shipped or r".lg\:grid-cols-4 {" in _shipped,
+          "static stylesheet contains the responsive-variant utility the page uses")
+    check("React.createElement(" in _shipped, "JSX compiled to React.createElement calls")
+    _compiled = _shipped.split('<script>\n', 1)[-1].rsplit('\n</script>', 1)[0]
+    check(_shipped.count('<script>\n') == 1 and "</script" not in _compiled,
+          "compiled JS carries no stray </script> that would truncate the block")
+
     html = html_text()
     check(f"const DB_URL = 'data/{gz_name}'" in html, "DB_URL points at the hashed gz file")
     check(f'<link rel="preload" as="fetch" href="data/{gz_name}" crossorigin>' in html, "DB is preloaded")

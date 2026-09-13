@@ -9,6 +9,7 @@ Produces a directory with:
 Run:  python build_client_site.py
 """
 import os, csv, shutil, json, sqlite3, time, sys, gzip, hashlib, glob
+import subprocess, re, tempfile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MD_DIR = r"U:\GIS\temp\CS\RS\Nook\RF_Test\MD"
@@ -838,6 +839,50 @@ def build_sqlite(bid_json_path, sqlite_path, main_json_path):
     return count
 
 
+# --- Build-time JSX / Tailwind toolchain -------------------------------------
+# client_dashboard.html stays hand-written JSX styled with Tailwind utility classes.
+# These two helpers do, once here, what the page used to make every visitor's browser
+# do: compile the JSX (Babel standalone, ~0.7 s of main thread + a 3 MB download) and
+# generate the utility CSS (the Tailwind play CDN). Not a bundler -- two single-file
+# transforms over the one page source.
+NODE_MODULES = os.path.join(SCRIPT_DIR, "node_modules")
+
+
+def _require_node_toolchain():
+    if not os.path.isdir(NODE_MODULES):
+        raise RuntimeError("node_modules/ missing -- run `npm install` in Final_Build once (build-time Babel + Tailwind).")
+
+
+def precompile_jsx(html):
+    """Replace the single <script type="text/babel"> block with compiled plain JS."""
+    m = re.search(r'<script type="text/babel">(.*?)</script>', html, flags=re.S)
+    if not m:
+        raise RuntimeError("no <script type=\"text/babel\"> block found")
+    with tempfile.TemporaryDirectory() as td:
+        src, out = os.path.join(td, "in.js"), os.path.join(td, "out.js")
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(m.group(1))
+        subprocess.run(["node", os.path.join(SCRIPT_DIR, "tools", "precompile.mjs"), src, out],
+                       check=True, cwd=SCRIPT_DIR)
+        with open(out, "r", encoding="utf-8") as f:
+            compiled = f.read()
+    print(f"  Precompiled JSX: {len(m.group(1)):,} -> {len(compiled):,} chars")
+    return html[:m.start()] + "<script>\n" + compiled + "\n</script>" + html[m.end():]
+
+
+def build_tailwind_css():
+    with tempfile.TemporaryDirectory() as td:
+        out = os.path.join(td, "tw.css")
+        subprocess.run(["node", os.path.join(NODE_MODULES, "tailwindcss", "lib", "cli.js"),
+                        "-c", os.path.join(SCRIPT_DIR, "tailwind.config.js"),
+                        "-i", os.path.join(SCRIPT_DIR, "tools", "tailwind.in.css"),
+                        "-o", out, "--minify"], check=True, cwd=SCRIPT_DIR)
+        with open(out, "r", encoding="utf-8") as f:
+            css = f.read()
+    print(f"  Generated static Tailwind CSS: {len(css)/1024:.0f} KB")
+    return css
+
+
 def main():
     global REFRESH_LC_CACHE
     REFRESH_LC_CACHE = "--refresh-lc-cache" in sys.argv
@@ -850,6 +895,24 @@ def main():
     with open(HTML_PATH, "r", encoding="utf-8") as f:
         html = f.read()
     print(f"  Read dashboard.html: {len(html):,} chars")
+
+    _require_node_toolchain()
+
+    # --- Tailwind: static stylesheet replaces the runtime CDN + inline config ---
+    # The replacement is passed as a lambda so re.subn treats the CSS literally --
+    # Tailwind's minified output is full of `\:` escapes (lg\:grid-cols-4 etc.) that a
+    # plain replacement string would interpret as backreferences/escapes.
+    tw_css = build_tailwind_css()
+    html, n = re.subn(r'\s*<script src="https://cdn\.tailwindcss\.com"></script>\s*<script>\s*tailwind\.config = \{.*?\};\s*</script>',
+                      lambda _m: '\n  <style id="tw">' + tw_css + '</style>', html, count=1, flags=re.S)
+    if n != 1:
+        raise RuntimeError("could not find the Tailwind CDN script + inline config block to replace")
+
+    # --- Babel: compile JSX once here instead of in every visitor's browser ---
+    html, n = re.subn(r'\s*<script src="https://unpkg\.com/@babel/standalone/babel\.min\.js"></script>', '', html, count=1)
+    if n != 1:
+        raise RuntimeError("could not find the Babel standalone script tag to remove")
+    html = precompile_jsx(html)
 
     # --- 6. Swap React dev builds for production ---
     # The source loads the development UMD builds, which carry helpful warnings while

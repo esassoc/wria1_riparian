@@ -1,0 +1,9 @@
+{
+  "name": "wria1-riparian-dashboard-build",
+  "private": true,
+  "description": "Build-time only: compiles client_dashboard.html JSX and generates its Tailwind stylesheet. Not a bundler.",
+  "devDependencies": {
+    "@babel/standalone": "8.0.5",
+    "tailwindcss": "3.4.19"
+  }
+}
