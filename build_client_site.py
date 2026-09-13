@@ -763,9 +763,13 @@ def build_sqlite(bid_json_path, sqlite_path, main_json_path):
         "min": round(sols_vals[0], 4), "p10": pct(10), "p25": pct(25), "p50": pct(50),
         "p75": pct(75), "p90": pct(90), "max": round(sols_vals[-1], 4),
     }
+    # Derived from the newest build input, not wall-clock time, so that identical inputs
+    # produce a byte-identical database (the shipped filename is a content hash).
+    newest_input = max(os.path.getmtime(p) for p in (bid_json_path, main_json_path, SCORES_CSV, FISH_OVERRIDE_CSV))
+    generated = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(newest_input))
     conn.executemany("INSERT INTO lab_meta VALUES (?, ?)", [
         ("solar_push_stats", json.dumps(solar_push_stats)),
-        ("generated", json.dumps(time.strftime("%Y-%m-%dT%H:%M:%S"))),
+        ("generated", json.dumps(generated)),
         ("source_meta", json.dumps(main_d.get("meta", {}))),
     ])
     print(f"    lab_sample: {len(sample):,} D1_Forest polygons; solar_push_stats from sols: "
@@ -867,7 +871,7 @@ def main():
     build_sqlite(BID_JSON, raw_path, MAIN_JSON)
     with open(raw_path, "rb") as f:
         raw = f.read()
-    gz_bytes = gzip.compress(raw, compresslevel=9)
+    gz_bytes = gzip.compress(raw, compresslevel=9, mtime=0)
     digest = hashlib.sha1(gz_bytes).hexdigest()[:8]
     gz_name = f"bids.{digest}.sqlite.gz"
     with open(os.path.join(data_dir, gz_name), "wb") as f:

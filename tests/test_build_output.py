@@ -24,6 +24,12 @@ def main():
     check(not os.path.isfile(os.path.join(SITE, "data", "bids.sqlite")), "no raw bids.sqlite ships")
     gz_name = os.path.basename(gz_files[0])
     check(_re.fullmatch(r"bids\.[0-9a-f]{8}\.sqlite\.gz", gz_name), f"hashed name pattern ok ({gz_name})")
+
+    with open(gz_files[0], "rb") as g:
+        hdr = g.read(10)
+    check(hdr[:2] == b"\x1f\x8b" and hdr[4:8] == b"\x00\x00\x00\x00",
+          "gzip header MTIME is zero (deterministic bytes -> stable content hash)")
+
     gz_mb = os.path.getsize(gz_files[0]) / 1e6
     check(gz_mb < 7, f"gzipped DB under 7 MB (got {gz_mb:.2f} MB)")
     check(not os.path.isfile(os.path.join(SITE, "data", "dashboard_data.json")),
@@ -142,6 +148,14 @@ def main():
     check(not bad_meta, f"every lab_meta.value is valid JSON (bad: {bad_meta})")
     keys = {r[0] for r in conn.execute("SELECT key FROM lab_meta")}
     check({"solar_push_stats", "generated", "source_meta"} <= keys, f"lab_meta has the three expected keys (got {sorted(keys)})")
+
+    import datetime as _dt
+    gen = _json.loads(conn.execute("SELECT value FROM lab_meta WHERE key='generated'").fetchone()[0])
+    gen_dt = _dt.datetime.strptime(gen, "%Y-%m-%dT%H:%M:%S")
+    newest = max(os.path.getmtime(os.path.join(ROOT, p)) for p in
+                 ("BID_Scores_Calculated_20260507.csv", os.path.join("data_overrides", "fish_access_override.csv")))
+    check(gen_dt >= _dt.datetime.fromtimestamp(newest, _dt.timezone.utc).replace(tzinfo=None) - _dt.timedelta(seconds=1),
+          f"lab_meta.generated ({gen}) is derived from build inputs, not wall-clock")
 
     # --- Fix 2: waterbody_bids retains the 4 previously-dropped BIDs ---
     for bid in ("L667_2", "L677_2", "L684_1", "L105_2"):
