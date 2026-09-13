@@ -3,8 +3,8 @@ Build multi-file GitHub Pages dashboard site.
 
 Produces a directory with:
   index.html          - lean dashboard (no inlined data/images)
-  data/dashboard_data.json
-  data/bids.sqlite    - SQLite database for BID Query + Bank Explorer
+  data/bids.sqlite    - SQLite database for the whole page (bids, zones, waterbody
+                        BIDs, Scoring Lab sample polygons, solar percentiles)
 
 Run:  python build_client_site.py
 """
@@ -501,7 +501,7 @@ def apply_fish_override_and_retier(bid_rows, attr_keys, override_path):
     }
 
 
-def build_sqlite(bid_json_path, sqlite_path):
+def build_sqlite(bid_json_path, sqlite_path, main_json_path):
     """Convert bid_explorer_data.json to bids.sqlite."""
     t0 = time.time()
     print("  Converting bid_explorer_data.json -> bids.sqlite ...")
@@ -559,6 +559,15 @@ def build_sqlite(bid_json_path, sqlite_path):
             wt TEXT     -- 'river' or 'lake'
         )
     """)
+
+    # Scoring Lab sample polygons (D1_Forest only, the only domain the Lab charts read) and
+    # small named constants. These replace dashboard_data.json on the client page.
+    conn.execute("""
+        CREATE TABLE lab_sample (
+            m REAL, d REAL, c REAL, fh REAL, spth REAL, sqft REAL, domain TEXT, zone TEXT
+        )
+    """)
+    conn.execute("CREATE TABLE lab_meta (key TEXT PRIMARY KEY, value TEXT)")
 
     # Field order matching the CREATE TABLE
     attr_keys = [
@@ -729,6 +738,39 @@ def build_sqlite(bid_json_path, sqlite_path):
     if wb_rows:
         conn.executemany("INSERT INTO waterbody_bids VALUES (?,?,?,?,?)", wb_rows)
 
+    # --- lab_sample + lab_meta (from the upstream dashboard_data.json and from bids.sols) ---
+    with open(main_json_path, "r", encoding="utf-8") as f:
+        main_d = json.load(f)
+    sample = [p for p in main_d.get("sensitivity", {}).get("sample_polygons", [])
+              if p.get("domain") == "D1_Forest"]
+    conn.executemany(
+        "INSERT INTO lab_sample VALUES (?,?,?,?,?,?,?,?)",
+        [(p.get("M"), p.get("D"), p.get("C"), p.get("FH"), p.get("SPTH"), p.get("SQFT"),
+          p.get("domain"), str(p.get("zone"))) for p in sample],
+    )
+    sols_vals = sorted(v[0] for v in conn.execute("SELECT sols FROM bids WHERE sols IS NOT NULL"))
+    def pct(p):
+        if not sols_vals:
+            return None
+        k = (len(sols_vals) - 1) * p / 100.0
+        lo, hi = int(k), min(int(k) + 1, len(sols_vals) - 1)
+        return round(sols_vals[lo] + (sols_vals[hi] - sols_vals[lo]) * (k - lo), 4)
+    n = len(sols_vals)
+    mean = sum(sols_vals) / n if n else None
+    std = (sum((v - mean) ** 2 for v in sols_vals) / n) ** 0.5 if n else None
+    solar_push_stats = {
+        "count": n, "mean": round(mean, 4), "std": round(std, 4),
+        "min": round(sols_vals[0], 4), "p10": pct(10), "p25": pct(25), "p50": pct(50),
+        "p75": pct(75), "p90": pct(90), "max": round(sols_vals[-1], 4),
+    }
+    conn.executemany("INSERT INTO lab_meta VALUES (?, ?)", [
+        ("solar_push_stats", json.dumps(solar_push_stats)),
+        ("generated", json.dumps(time.strftime("%Y-%m-%dT%H:%M:%S"))),
+        ("source_meta", json.dumps(main_d.get("meta", {}))),
+    ])
+    print(f"    lab_sample: {len(sample):,} D1_Forest polygons; solar_push_stats from sols: "
+          f"mean={solar_push_stats['mean']}, p50={solar_push_stats['p50']}")
+
     # No secondary indexes: every dashboard query is a filtered scan or GROUP BY over
     # 30,850 rows (~1 ms either way); the six old indexes cost 3.25 MB of download.
     conn.commit()
@@ -798,40 +840,6 @@ def main():
         html = f.read()
     print(f"  Read dashboard.html: {len(html):,} chars")
 
-    # --- 2. Rewrite dashboard_data.json fetch path ---
-    html = html.replace(
-        "fetch('./dashboard_data.json",
-        "fetch('data/dashboard_data.json"
-    )
-    print("  Rewrote dashboard_data.json path -> data/")
-
-    # --- 4. Add sql.js CDN script to <head> ---
-    sqljs_tag = (
-        '<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>\n'
-        '<script>if(typeof initSqlJs==="undefined"&&typeof exports==="object")window.initSqlJs=exports.initSqlJs||exports;</script>\n'
-    )
-    html = html.replace("</head>", sqljs_tag + "</head>", 1)
-    print("  Added sql.js CDN script tag (with global fallback)")
-
-    # --- 5. Replace bid_explorer_data.json fetch with sql.js init ---
-    old_bid_fetch = """fetch('./bid_explorer_data.json?v=' + Date.now())
-          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-          .then(d => setSharedBidData(d))
-          .catch(() => {}); // non-blocking — panels show their own loading states"""
-
-    new_bid_fetch = """initSqlJs({ locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${f}` })
-          .then(SQL => fetch('data/bids.sqlite').then(r => r.arrayBuffer()).then(buf => {
-            const db = new SQL.Database(new Uint8Array(buf));
-            setSharedBidData({ db });
-          }))
-          .catch(err => console.error('SQLite load error:', err));"""
-
-    if old_bid_fetch in html:
-        html = html.replace(old_bid_fetch, new_bid_fetch, 1)
-        print("  Replaced bid_explorer fetch with sql.js init")
-    else:
-        print("  WARNING: Could not find bid_explorer fetch pattern!")
-
     # --- 6. Swap React dev builds for production ---
     # The source loads the development UMD builds, which carry helpful warnings while
     # editing but are substantially larger and slower. The shipped client site should
@@ -857,15 +865,9 @@ def main():
     html_kb = os.path.getsize(out_html) / 1024
     print(f"  Wrote index.html: {html_kb:.0f} KB")
 
-    # --- Copy dashboard_data.json ---
-    shutil.copy2(MAIN_JSON, os.path.join(OUTPUT_DIR, "data", "dashboard_data.json"))
-    json_mb = os.path.getsize(MAIN_JSON) / (1024 * 1024)
-    print(f"  Copied dashboard_data.json: {json_mb:.1f} MB")
-
-
     # --- Build SQLite database ---
     sqlite_path = os.path.join(OUTPUT_DIR, "data", "bids.sqlite")
-    build_sqlite(BID_JSON, sqlite_path)
+    build_sqlite(BID_JSON, sqlite_path, MAIN_JSON)
 
     # --- Summary ---
     total_size = sum(

@@ -17,8 +17,10 @@ def html_text():
 
 def main():
     check(os.path.isdir(SITE), "site/ exists")
-    for rel in ["index.html", "data/dashboard_data.json", "data/bids.sqlite"]:
+    for rel in ["index.html", "data/bids.sqlite"]:
         check(os.path.isfile(os.path.join(SITE, rel)), f"{rel} exists")
+    check(not os.path.isfile(os.path.join(SITE, "data", "dashboard_data.json")),
+          "dashboard_data.json no longer ships (folded into the SQLite)")
 
     # Internal methodology figures belonged to the deleted Methodology tab and must
     # not be published to a client-facing URL (spec section 3).
@@ -34,8 +36,9 @@ def main():
 
     html = html_text()
     check("data/bids.sqlite" in html, "index.html fetches data/bids.sqlite")
-    check("data/dashboard_data.json" in html, "index.html fetches data/dashboard_data.json")
     check("bid_explorer_data.json" not in html, "no leftover bid_explorer_data.json fetch")
+    check("dashboard_data.json" not in html, "no dashboard_data.json fetch in the page")
+    check("Date.now()" not in html, "no Date.now() cache-buster on data fetches")
 
     conn = sqlite3.connect(os.path.join(SITE, "data", "bids.sqlite"))
     n = conn.execute("SELECT COUNT(*) FROM bids").fetchone()[0]
@@ -102,6 +105,18 @@ def main():
     actual_tiers = dict(conn.execute("SELECT tier, COUNT(*) FROM bids GROUP BY tier").fetchall())
     check(actual_tiers == expected_tiers,
           f"tier counts match corrected figures {expected_tiers} (got {actual_tiers})")
+
+    # --- Task 3: Lab sample + solar percentiles live in the DB ---
+    n_lab = conn.execute("SELECT COUNT(*) FROM lab_sample WHERE domain = 'D1_Forest'").fetchone()[0]
+    check(n_lab == 3371, f"lab_sample has the 3371 D1_Forest sample polygons (got {n_lab})")
+    import json as _json
+    sps = _json.loads(conn.execute("SELECT value FROM lab_meta WHERE key = 'solar_push_stats'").fetchone()[0])
+    for k in ("count", "mean", "std", "min", "p10", "p25", "p50", "p75", "p90", "max"):
+        check(k in sps, f"solar_push_stats has {k}")
+    check(sps["count"] == 30850, "solar_push_stats computed over all 30850 banks")
+    mean_sols = conn.execute("SELECT AVG(sols) FROM bids").fetchone()[0]
+    check(abs(sps["mean"] - mean_sols) < 0.001, f"solar_push_stats.mean matches AVG(sols) ({sps['mean']} vs {mean_sols:.4f})")
+    check(sps["min"] <= sps["p50"] <= sps["max"], "solar percentiles are ordered")
 
     # --- Fix 2: waterbody_bids retains the 4 previously-dropped BIDs ---
     for bid in ("L667_2", "L677_2", "L684_1", "L105_2"):
