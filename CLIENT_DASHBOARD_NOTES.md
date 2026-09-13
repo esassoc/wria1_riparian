@@ -34,7 +34,7 @@ analytical summary tabs.
 | `tests/test_visual_polish.py` | Asserts the September 2026 visual-polish contract holds: no brand leaks, no abbreviations, no dead code, no emoji, no mojibake. |
 | `tests/test_zone_stats.py` | Asserts the area and zone-composition data reconciles. |
 | `tests/ground_truth.py` | Prints expected values for browser-side spot checks. |
-| `tests/run_all.py` | Runs every test script above; the one command to run after a build. |
+| `tests/run_all.py` | Runs every `tests/test_*.py` script (`ground_truth.py` is a reference printer, not a test, and is not run); the one command to run after a build. |
 | `tests/db_helpers.py` | Shared helper that unpacks the shipped `bids.<hash>.sqlite.gz` to a temp file and returns a connection. Used by the tests and by `tools/make_fish_override.py`. |
 | `data_cache/lc_derived_20260501.json` | Committed cache of everything the build needs out of `BID_ZID_LC_20260501.csv`. Regenerate with `python build_client_site.py --refresh-lc-cache`. |
 | `vendor/` + `vendor/MANIFEST.json` | Committed, pinned third-party scripts (React, ReactDOM, prop-types, Recharts, sql.js + wasm) with their sha256s. Copied into `site/vendor/` by the build; both copies are hash-checked. |
