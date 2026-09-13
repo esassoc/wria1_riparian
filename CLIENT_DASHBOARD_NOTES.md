@@ -2,7 +2,8 @@
 
 **Built:** September 2026
 **Location:** `U:\GIS\GIS\Projects\2024xxx\D202401511_WRIA_1_Riparian_Needs_Assessment\05_Code\Final_Build`
-**Deploy target:** GitHub Pages, linked from ArcGIS Online webmap popups
+**Deploy target:** GitHub Pages, linked from ArcGIS Online webmap popups — live at
+`https://esassoc.github.io/wria1_riparian/` (repo `https://github.com/esassoc/wria1_riparian`)
 **Data vintage:** May 2026 run — 30,850 BIDs, 177,016 riparian acres
 
 ---
@@ -160,12 +161,16 @@ touched — both derive from data already in `bid_explorer_data.json`.
 
 - **`bids.sqft`** — total area per BID. Drives the acres KPI and every area-weighted figure.
   Acres = sqft ÷ 43,560.
-- **`zone_stats` table** — 89,319 rows, one per BID × buffer zone (indices 0–4; the channel
-  zone is excluded). Landcover is stored as **area, not percent**, so weighted composition
-  for any selection is a plain `SUM(lcN_sqft)/SUM(sqft)`. Without this, composition by buffer
-  zone would mean parsing ~150,000 JSON blobs in the browser on every Apply.
+- **`zone_stats` table (superseded 2026-09-13, see §14).** Originally a separate 89,319-row
+  table, one per BID × buffer zone (indices 0–4; the channel zone excluded), storing landcover
+  as area so weighted composition was a plain `SUM(lcN_sqft)/SUM(sqft)`. The September 2026
+  performance pass (Task 2) folded it into the `zones` table below — same rows, same
+  area-based composition query, no separate table any more.
 
-The existing `zones` JSON table is untouched — Bank Explorer depends on it.
+As of the September 2026 performance pass, `zones` is a single numeric table (18 columns,
+proportions not JSON) that serves both Bank Explorer's point lookups and Summary Stats'
+aggregates — see §14 for the exact schema. The old `zones.data` JSON-blob table it replaced is
+gone.
 
 ## 7. Performance
 
@@ -281,16 +286,18 @@ that has no such NaN special case, retaining all 1,224 waterbody BIDs (up from 1
 ### Negative canopy height clamp (Fix 3)
 
 A couple of Forest polygons carry a negative `ForestHeight` in the source data
-(`BID_ZID_LC_20260501.csv`), which propagated into `zone_stats.cht` (previous minimum: −0.39 ft)
-— physically impossible for a canopy height. Approved by the project lead: the forest-area-
-weighted `cht` value is clamped to 0 at the point it's computed in `build_client_site.py`. This
-is a **display-layer clamp over a source-data artifact**, not a fix to the source data. 5
+(`BID_ZID_LC_20260501.csv`), which propagated into what was `zone_stats.cht` (previous
+minimum: −0.39 ft; the column now lives in the merged `zones` table, see §14) — physically
+impossible for a canopy height. Approved by the project lead: the forest-area-weighted `cht`
+value is clamped to 0 at the point it's computed in `build_client_site.py`. This is a
+**display-layer clamp over a source-data artifact**, not a fix to the source data. 5
 (BID, zone) rows were clamped in the September 2026 build.
 
 ## 12. Outstanding
 
-- **Git is not set up.** `05_Code` is not a repository. Initialising `Final_Build`, wiring
-  the Pages remote, and the push workflow are still to do.
+- **Git is now set up (resolved 2026-09-13).** `Final_Build` is a git repository, pushed to
+  `https://github.com/esassoc/wria1_riparian`; `site/` is committed and deployed to GitHub
+  Pages by GitHub Actions on every push that touches `site/**`. See §14.
 - **The knowledge-transfer doc** (`MD/WRIA1_Scoring_Weighting_KnowledgeTransfer.md`) lists
   three HTML deployments. This client build is a fourth and should be added when it ships.
 - **Explanatory hover wording is still draft.** Every `TERMS` entry carries a source comment
@@ -427,3 +434,100 @@ Salmon, Impairment, River Context, Administrative, Site Modifiers), each tinted 
 hue, holding the `FilterGroup` chip groups and range sliders. The `.bq` two-column layout
 (rail + map/table) collapses to a single stacked column under the `lg` breakpoint - checked at
 the tablet preset in this task's verification pass.
+
+## 14. Build, data shape and deployment (2026-09-13)
+
+1. **Repository.** `https://github.com/esassoc/wria1_riparian`. Live URL:
+   `https://esassoc.github.io/wria1_riparian/`. Deep link pattern: `#bid/<BID_ID>`
+   (e.g. `#bid/AC100_1`), used in ArcGIS Online webmap popups to open Bank Explorer directly
+   on a bank.
+
+2. **One-time setup on a new machine.**
+
+   ```bash
+   npm install
+   ```
+
+   `python tools/fetch_vendor.py` is **not** needed on a normal clone — `vendor/` (React,
+   ReactDOM, prop-types, Recharts, sql.js + wasm) is committed. Only re-run it if a pinned
+   vendor version changes.
+
+3. **Rebuild + deploy.**
+
+   ```bash
+   python build_client_site.py
+   python tests/run_all.py
+   git add site
+   git commit -m "..."
+   git push
+   ```
+
+   The push triggers the `pages.yml` GitHub Actions workflow (path-filtered to `site/**`),
+   which publishes `site/` to GitHub Pages. A commit that touches only docs, tests, or source
+   outside `site/` does **not** trigger a Pages run.
+
+4. **Inputs.**
+   - `BID_Scores_Calculated_20260507.csv` — committed.
+   - `data_cache/lc_derived_20260501.json` — committed; regenerate with
+     `--refresh-lc-cache` only if the 432 MB `BID_ZID_LC_20260501.csv` changes.
+   - `RF_Test\MD\bid_explorer_data.json` and `dashboard_data.json` — read-only, on the `U:`
+     drive, never copied into this repo.
+
+5. **Shipped schema** (from `build_client_site.py`'s `build_sqlite`, September 2026
+   performance pass):
+
+   ```sql
+   CREATE TABLE bids (
+       bid TEXT PRIMARY KEY,
+       rid TEXT,
+       wet REAL,
+       tier TEXT, srz TEXT, fish TEXT, chk TEXT, mgr TEXT,
+       bfw TEXT, bft REAL, hmz INTEGER, zon TEXT,
+       cua TEXT, jur TEXT,
+       ti INTEGER, tic TEXT,
+       fi INTEGER, fic TEXT,
+       si INTEGER, sic TEXT,
+       ai INTEGER,
+       sal INTEGER, sps TEXT,
+       asp REAL, af REAL,
+       str TEXT, ss INTEGER, zc INTEGER, pc INTEGER, dom TEXT, wt TEXT,
+       cx REAL, cy REAL, pf REAL, ps REAL, ph REAL,
+       mc REAL, mh REAL, rpsf REAL, rpsa REAL,
+       sqft REAL, rpsn REAL, sols REAL, slps REAL
+       -- (plus the 6 secondary indexes dropped in the Sep 2026 pass)
+   );
+
+   CREATE TABLE zones (
+       bid TEXT NOT NULL, z INTEGER NOT NULL, sqft REAL,
+       lc0 REAL, lc1 REAL, lc2 REAL, lc3 REAL, lc4 REAL,
+       lc5 REAL, lc6 REAL, lc7 REAL, lc8 REAL,
+       comp REAL, ht REAL, den REAL, zrp REAL, cstd REAL, cht REAL,
+       PRIMARY KEY (bid, z)
+   ) WITHOUT ROWID;
+
+   CREATE TABLE waterbody_bids (
+       bid TEXT PRIMARY KEY,
+       rid TEXT,
+       lc TEXT,    -- JSON-encoded array of 9 landcover proportions
+       sqft INTEGER,
+       wt TEXT     -- 'river' or 'lake'
+   );
+
+   CREATE TABLE lab_sample (
+       m REAL, d REAL, c REAL, fh REAL, spth REAL, sqft REAL, domain TEXT, zone TEXT
+   );
+
+   CREATE TABLE lab_meta (key TEXT PRIMARY KEY, value TEXT);
+   ```
+
+   `lc0`…`lc8` on `zones` are **proportions** (0–1 fraction of that zone's area in each of
+   the 9 landcover classes), not the raw area figures the pre-Sep-2026 `zone_stats` table
+   stored — weighted composition for a selection is
+   `SUM(lcN * sqft) / SUM(sqft)` rather than the old `SUM(lcN_sqft)/SUM(sqft)`.
+
+6. **What no longer ships:** `dashboard_data.json` (replaced by `lab_sample`/`lab_meta` and
+   the columns already on `bids`); the linear score columns `rp`, `rpf`, `rpa`, `sol`, `slp`
+   (dropped — the client page never surfaced them, only the S-curve `rpsf`/`rpsa`/`sols`/
+   `slps`); the six `bids` secondary indexes; the in-browser Babel and Tailwind runtimes
+   (JSX and utility CSS are compiled at build time); the unpkg/cdnjs third-party script
+   hosts (React, ReactDOM, prop-types, Recharts, sql.js now self-hosted under `vendor/`).
