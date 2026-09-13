@@ -2,9 +2,6 @@
 BID_ZID_LC_20260501.csv
 TP_Split_JOIN_20260507.csv
 
-# Build output -- ignored until the deploy task (Task 7) removes this line
-site/
-
 # Local tooling state
 node_modules/
 __pycache__/

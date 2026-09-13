@@ -967,6 +967,9 @@ def main():
     html_kb = os.path.getsize(out_html) / 1024
     print(f"  Wrote index.html: {html_kb:.0f} KB")
 
+    with open(os.path.join(OUTPUT_DIR, ".nojekyll"), "w") as f:
+        f.write("")
+
     # --- Summary ---
     total_size = sum(
         os.path.getsize(os.path.join(dp, f))
