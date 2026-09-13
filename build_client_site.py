@@ -501,6 +501,14 @@ def apply_fish_override_and_retier(bid_rows, attr_keys, override_path):
     }
 
 
+def derive_generated_stamp(bid_json_path, main_json_path):
+    """ISO timestamp of the newest build input (UTC). Input-derived, never wall-clock, so
+    identical inputs give a byte-identical database and therefore a stable content hash."""
+    newest = max(os.path.getmtime(p) for p in
+                 (bid_json_path, main_json_path, SCORES_CSV, FISH_OVERRIDE_CSV, LC_CACHE))
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(newest))
+
+
 def build_sqlite(bid_json_path, sqlite_path, main_json_path):
     """Convert bid_explorer_data.json to bids.sqlite."""
     t0 = time.time()
@@ -765,8 +773,7 @@ def build_sqlite(bid_json_path, sqlite_path, main_json_path):
     }
     # Derived from the newest build input, not wall-clock time, so that identical inputs
     # produce a byte-identical database (the shipped filename is a content hash).
-    newest_input = max(os.path.getmtime(p) for p in (bid_json_path, main_json_path, SCORES_CSV, FISH_OVERRIDE_CSV))
-    generated = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(newest_input))
+    generated = derive_generated_stamp(bid_json_path, main_json_path)
     conn.executemany("INSERT INTO lab_meta VALUES (?, ?)", [
         ("solar_push_stats", json.dumps(solar_push_stats)),
         ("generated", json.dumps(generated)),

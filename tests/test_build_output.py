@@ -149,13 +149,14 @@ def main():
     keys = {r[0] for r in conn.execute("SELECT key FROM lab_meta")}
     check({"solar_push_stats", "generated", "source_meta"} <= keys, f"lab_meta has the three expected keys (got {sorted(keys)})")
 
-    import datetime as _dt
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("bcs", os.path.join(ROOT, "build_client_site.py"))
+    _bcs = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_bcs)
+    expected_gen = _bcs.derive_generated_stamp(_bcs.BID_JSON, _bcs.MAIN_JSON)
     gen = _json.loads(conn.execute("SELECT value FROM lab_meta WHERE key='generated'").fetchone()[0])
-    gen_dt = _dt.datetime.strptime(gen, "%Y-%m-%dT%H:%M:%S")
-    newest = max(os.path.getmtime(os.path.join(ROOT, p)) for p in
-                 ("BID_Scores_Calculated_20260507.csv", os.path.join("data_overrides", "fish_access_override.csv")))
-    check(gen_dt >= _dt.datetime.fromtimestamp(newest, _dt.timezone.utc).replace(tzinfo=None) - _dt.timedelta(seconds=1),
-          f"lab_meta.generated ({gen}) is derived from build inputs, not wall-clock")
+    check(gen == expected_gen,
+          f"lab_meta.generated equals the input-derived stamp ({gen} vs expected {expected_gen}); "
+          "a wall-clock value would differ")
 
     # --- Fix 2: waterbody_bids retains the 4 previously-dropped BIDs ---
     for bid in ("L667_2", "L677_2", "L684_1", "L105_2"):
