@@ -1,0 +1,118 @@
+# fish_access_override.csv
+# Source: TP_Split_JOIN_20260507.csv (GIS feature layer export, dated 2026-05-07)
+# Generated: 2026-09-13 by tools/make_fish_override.py
+# Why: the project lead ruled the GIS feature layer's Fish_simple value
+#      authoritative for fish access. BID_Scores_Calculated_20260507.csv
+#      (the scoring table used to build bids.sqlite) carries a stale
+#      Fish_simple pull that disagrees with the GIS layer on these BIDs.
+# Row count: 104 (a clean 52/52 swap:
+#      fish->gradient in one direction, gradient->fish in the other).
+# To regenerate: re-run `python tools/make_fish_override.py` after any
+#      update to the GIS export or the scoring table. This generator is
+#      NOT part of the build -- build_client_site.py only reads this
+#      small output file, never the 40 MB source CSV.
+bid,fish_gis,fish_scoring
+AC351_4,fish,gradient
+L349_1,fish,gradient
+T10052_2,gradient,fish
+T10112_1,gradient,fish
+T10123_1,gradient,fish
+T10131_1,gradient,fish
+T10183_2,gradient,fish
+T10368_2,gradient,fish
+T10576_2,gradient,fish
+T10978_1,gradient,fish
+T11100_2,gradient,fish
+T11137_2,gradient,fish
+T11293_2,gradient,fish
+T11468_2,gradient,fish
+T11843_1,gradient,fish
+T12013_2,gradient,fish
+T1242_1,fish,gradient
+T12507_1,gradient,fish
+T12643_2,gradient,fish
+T12690_1,gradient,fish
+T12712_2,gradient,fish
+T12841_2,gradient,fish
+T13089_2,gradient,fish
+T1358_1,fish,gradient
+T13666_2,gradient,fish
+T14038_1,gradient,fish
+T14060_2,gradient,fish
+T14154_2,gradient,fish
+T14332_2,gradient,fish
+T14369_2,gradient,fish
+T1442_1,fish,gradient
+T1460_2,fish,gradient
+T14879_2,fish,gradient
+T14913_2,fish,gradient
+T15075_1,fish,gradient
+T15100_1,fish,gradient
+T15176_2,fish,gradient
+T15209_2,fish,gradient
+T15251_2,fish,gradient
+T15315_1,fish,gradient
+T15417_2,fish,gradient
+T15502_2,fish,gradient
+T1551_2,fish,gradient
+T15578_1,fish,gradient
+T15579_2,fish,gradient
+T16005_1,fish,gradient
+T1637_1,fish,gradient
+T16703_2,fish,gradient
+T16711_1,fish,gradient
+T16741_1,fish,gradient
+T1683_1,fish,gradient
+T16883_1,fish,gradient
+T17600_2,fish,gradient
+T17680_2,fish,gradient
+T17707_2,fish,gradient
+T17719_1,fish,gradient
+T17740_2,fish,gradient
+T17771_2,fish,gradient
+T17850_2,fish,gradient
+T2384_1,fish,gradient
+T2658_2,fish,gradient
+T2804_1,fish,gradient
+T2915_1,fish,gradient
+T2944_2,fish,gradient
+T3042_1,fish,gradient
+T3051_2,fish,gradient
+T3093_2,fish,gradient
+T3094_2,fish,gradient
+T3239_2,fish,gradient
+T3270_1,fish,gradient
+T3345_1,fish,gradient
+T3470_2,fish,gradient
+T3754_2,fish,gradient
+T3870_1,fish,gradient
+T3929_2,fish,gradient
+T4331_1,fish,gradient
+T4377_2,fish,gradient
+T4414_1,fish,gradient
+T6077_1,gradient,fish
+T6530_2,gradient,fish
+T6650_2,gradient,fish
+T6701_2,gradient,fish
+T6801_2,gradient,fish
+T6813_1,gradient,fish
+T6931_2,gradient,fish
+T6981_1,gradient,fish
+T7062_2,gradient,fish
+T7282_2,gradient,fish
+T7334_2,gradient,fish
+T7441_1,gradient,fish
+T7494_2,gradient,fish
+T7569_2,gradient,fish
+T7670_2,gradient,fish
+T7802_1,gradient,fish
+T8702_1,gradient,fish
+T8896_1,gradient,fish
+T8960_1,gradient,fish
+T9095_1,gradient,fish
+T9377_2,gradient,fish
+T9416_1,gradient,fish
+T9428_2,gradient,fish
+T9756_1,gradient,fish
+T9865_1,gradient,fish
+T9941_1,gradient,fish
