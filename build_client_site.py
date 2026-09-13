@@ -916,14 +916,6 @@ def main():
         raise RuntimeError("could not find the Babel standalone script tag to remove")
     html = precompile_jsx(html)
 
-    # --- 6. Swap React dev builds for production ---
-    # The source loads the development UMD builds, which carry helpful warnings while
-    # editing but are substantially larger and slower. The shipped client site should
-    # not pay that cost.
-    for mod in ("react", "react-dom"):
-        html = html.replace(f"umd/{mod}.development.js", f"umd/{mod}.production.min.js")
-    print("  Swapped React to production builds")
-
     # --- 7. Update server requirement comment ---
     html = html.replace(
         "Note: Chrome blocks fetch() from file:// URLs. Use the server above or Firefox.",
@@ -931,7 +923,7 @@ def main():
     )
 
     # --- Create output directories ---
-    for subdir in ["", "data"]:
+    for subdir in ["", "data", "vendor"]:
         os.makedirs(os.path.join(OUTPUT_DIR, subdir), exist_ok=True)
 
     # --- Build SQLite database, gzip it, content-hash the filename ---
@@ -956,6 +948,14 @@ def main():
     if n_refs < 2:
         raise RuntimeError(f"expected DB_URL literal and preload link to reference data/bids.sqlite.gz, found {n_refs}")
     html = html.replace("data/bids.sqlite.gz", f"data/{gz_name}")
+
+    # --- Vendor scripts: copy the committed, pinned files (see tools/fetch_vendor.py) ---
+    vendor_src = os.path.join(SCRIPT_DIR, "vendor")
+    with open(os.path.join(vendor_src, "MANIFEST.json"), encoding="utf-8") as f:
+        manifest = json.load(f)
+    for name in manifest:
+        shutil.copy2(os.path.join(vendor_src, name), os.path.join(OUTPUT_DIR, "vendor", name))
+    print(f"  Copied {len(manifest)} vendor files")
 
     # --- Write index.html ---
     out_html = os.path.join(OUTPUT_DIR, "index.html")

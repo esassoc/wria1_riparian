@@ -12,9 +12,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <!-- Start the two big downloads before the scripts below parse and compile -->
   <link rel="preload" as="fetch" href="data/bids.sqlite.gz" crossorigin>
-  <link rel="preload" as="fetch" href="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm" crossorigin>
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preload" as="fetch" href="vendor/sql-wasm.wasm" crossorigin>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -34,12 +32,12 @@
       }}
     };
   </script>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
-  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <script src="vendor/react.production.min.js"></script>
+  <script src="vendor/react-dom.production.min.js"></script>
+  <script src="vendor/prop-types.min.js"></script>
+  <script src="vendor/Recharts.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+  <script src="vendor/sql-wasm.js"></script>
   <script>if(typeof initSqlJs==="undefined"&&typeof exports==="object")window.initSqlJs=exports.initSqlJs||exports;</script>
   <style>
     :root{
@@ -211,7 +209,7 @@
     // BIDs, the Scoring Lab sample polygons and small constants). The build script may
     // rewrite DB_URL to a content-hashed filename; keep it a single string literal.
     const DB_URL = 'data/bids.sqlite.gz';
-    const SQLJS_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/';
+    const SQLJS_BASE = 'vendor/';
 
     async function loadDatabase() {
       if (typeof DecompressionStream === 'undefined') {

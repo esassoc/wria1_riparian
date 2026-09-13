@@ -44,8 +44,21 @@ def main():
           "no methods_citations.js script tag in index.html")
     check("preprocess_dashboard.py" not in html_text(),
           "no internal build instructions leaked into the shipped page")
-    check("react.development" not in html_text(),
-          "React production build is used, not development")
+    for host in ("unpkg.com", "cdnjs.cloudflare.com", "cdn.tailwindcss.com"):
+        check(host not in html_text(), f"no third-party script host {host} in shipped page")
+    import json as _json2
+    manifest = _json2.load(open(os.path.join(ROOT, "vendor", "MANIFEST.json"), encoding="utf-8"))
+    expected_vendor = {"react.production.min.js", "react-dom.production.min.js", "prop-types.min.js",
+                       "Recharts.js", "sql-wasm.js", "sql-wasm.wasm"}
+    check(set(manifest) == expected_vendor, f"vendor manifest lists exactly {sorted(expected_vendor)} (got {sorted(manifest)})")
+    import hashlib as _hl
+    for name, info in manifest.items():
+        p = os.path.join(SITE, "vendor", name)
+        check(os.path.isfile(p), f"site/vendor/{name} ships")
+        check(_hl.sha256(open(p, "rb").read()).hexdigest() == info["sha256"], f"site/vendor/{name} matches manifest sha256")
+        check(f"vendor/{name}" in html_text() or name == "sql-wasm.wasm", f"index.html references vendor/{name}")
+    check("SQLJS_BASE = 'vendor/'" in html_text(), "sql.js loads its wasm from vendor/")
+    check("fonts.googleapis.com" in html_text(), "Google Fonts remain (the one allowed external resource)")
 
     # --- Task 5: JSX and Tailwind are compiled at build time, not in the browser ---
     _shipped = html_text()

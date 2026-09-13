@@ -1,0 +1,32 @@
+{
+  "react.production.min.js": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js",
+    "sha256": "d949f1c3687aedadcedac85261865f29b17cd273997e7f6b2bfc53b2f9d4c4dd",
+    "bytes": 10751
+  },
+  "react-dom.production.min.js": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js",
+    "sha256": "35f4f974f4b2bcd44da73963347f8952e341f83909e4498227d4e26b98f66f0d",
+    "bytes": 131835
+  },
+  "prop-types.min.js": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js",
+    "sha256": "e653471aba824786aee5dce1bcb5a86ed30c8518d346d2ace0460a5633a9cbdb",
+    "bytes": 1722
+  },
+  "Recharts.js": {
+    "url": "https://unpkg.com/recharts@2.12.7/umd/Recharts.js",
+    "sha256": "d9aa8577cf67317ed7d27f10f5ce88d56e4bfc15d37ba5ba62f8dedf24edae4d",
+    "bytes": 498814
+  },
+  "sql-wasm.js": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js",
+    "sha256": "558a72c3ab3415d0e6d243cfd23f9d61543600d59054b4b7b8da3cd65f6b9fd4",
+    "bytes": 49857
+  },
+  "sql-wasm.wasm": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm",
+    "sha256": "d7e61b828523001f26ce0b3f88dabcf6c12e5e6edf80eb4f08b26ac7b946ff88",
+    "bytes": 655300
+  }
+}

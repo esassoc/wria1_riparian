@@ -1,0 +1,5 @@
+# Pinned, hash-verified third-party files (see tools/fetch_vendor.py / vendor/MANIFEST.json).
+# Keep their exact upstream bytes -- no CRLF normalization on any platform,
+# or a Windows checkout with core.autocrlf=true would rewrite the .js files'
+# line endings and break the sha256 checks in tests/test_build_output.py.
+vendor/* -text
