@@ -10,6 +10,11 @@
   -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <!-- Start the two big downloads before the scripts below parse and compile -->
+  <link rel="preload" as="fetch" href="data/bids.sqlite.gz" crossorigin>
+  <link rel="preload" as="fetch" href="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -205,16 +210,20 @@
     // One fetch: the SQLite holds every attribute the page needs (bids, zones, waterbody
     // BIDs, the Scoring Lab sample polygons and small constants). The build script may
     // rewrite DB_URL to a content-hashed filename; keep it a single string literal.
-    const DB_URL = 'data/bids.sqlite';
+    const DB_URL = 'data/bids.sqlite.gz';
     const SQLJS_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/';
 
     async function loadDatabase() {
+      if (typeof DecompressionStream === 'undefined') {
+        throw new Error('This browser cannot open the dashboard data. Please use a current version of Chrome, Edge, Firefox or Safari.');
+      }
       const [SQL, resp] = await Promise.all([
         initSqlJs({ locateFile: f => SQLJS_BASE + f }),
         fetch(DB_URL),
       ]);
       if (!resp.ok) throw new Error(`HTTP ${resp.status} loading ${DB_URL}`);
-      const bytes = new Uint8Array(await resp.arrayBuffer());
+      const inflated = resp.body.pipeThrough(new DecompressionStream('gzip'));
+      const bytes = new Uint8Array(await new Response(inflated).arrayBuffer());
       // sql.js copies `bytes` into WASM memory; nothing below retains the JS copy.
       return new SQL.Database(bytes);
     }

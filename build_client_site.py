@@ -8,7 +8,7 @@ Produces a directory with:
 
 Run:  python build_client_site.py
 """
-import os, csv, shutil, json, sqlite3, time, sys
+import os, csv, shutil, json, sqlite3, time, sys, gzip, hashlib, glob
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MD_DIR = r"U:\GIS\temp\CS\RS\Nook\RF_Test\MD"
@@ -858,16 +858,35 @@ def main():
     for subdir in ["", "data"]:
         os.makedirs(os.path.join(OUTPUT_DIR, subdir), exist_ok=True)
 
+    # --- Build SQLite database, gzip it, content-hash the filename ---
+    data_dir = os.path.join(OUTPUT_DIR, "data")
+    for stale in glob.glob(os.path.join(data_dir, "bids.*.sqlite.gz")) + [os.path.join(data_dir, "bids.sqlite")]:
+        if os.path.exists(stale):
+            os.remove(stale)
+    raw_path = os.path.join(data_dir, "bids.sqlite")
+    build_sqlite(BID_JSON, raw_path, MAIN_JSON)
+    with open(raw_path, "rb") as f:
+        raw = f.read()
+    gz_bytes = gzip.compress(raw, compresslevel=9)
+    digest = hashlib.sha1(gz_bytes).hexdigest()[:8]
+    gz_name = f"bids.{digest}.sqlite.gz"
+    with open(os.path.join(data_dir, gz_name), "wb") as f:
+        f.write(gz_bytes)
+    os.remove(raw_path)
+    print(f"  Wrote data/{gz_name}: {len(gz_bytes)/1e6:.2f} MB gzipped (from {len(raw)/1e6:.1f} MB raw)")
+
+    # --- Point the page at the hashed file (DB_URL literal + preload link) ---
+    n_refs = html.count("data/bids.sqlite.gz")
+    if n_refs < 2:
+        raise RuntimeError(f"expected DB_URL literal and preload link to reference data/bids.sqlite.gz, found {n_refs}")
+    html = html.replace("data/bids.sqlite.gz", f"data/{gz_name}")
+
     # --- Write index.html ---
     out_html = os.path.join(OUTPUT_DIR, "index.html")
     with open(out_html, "w", encoding="utf-8") as f:
         f.write(html)
     html_kb = os.path.getsize(out_html) / 1024
     print(f"  Wrote index.html: {html_kb:.0f} KB")
-
-    # --- Build SQLite database ---
-    sqlite_path = os.path.join(OUTPUT_DIR, "data", "bids.sqlite")
-    build_sqlite(BID_JSON, sqlite_path, MAIN_JSON)
 
     # --- Summary ---
     total_size = sum(

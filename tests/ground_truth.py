@@ -2,7 +2,16 @@
 import os, sqlite3
 DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                   "site", "data", "bids.sqlite")
-c = sqlite3.connect(DB)
+
+import glob, gzip, tempfile
+def open_db():
+    gz = glob.glob(os.path.join(os.path.dirname(DB), "bids.*.sqlite.gz"))[0]
+    tmp = os.path.join(tempfile.gettempdir(), "bids_test_unpacked.sqlite")
+    with gzip.open(gz, "rb") as g, open(tmp, "wb") as out:
+        out.write(g.read())
+    return sqlite3.connect(tmp)
+
+c = open_db()
 print("ALL   n, acres, rpf, ci:", c.execute(
     "SELECT COUNT(*), ROUND(SUM(sqft)/43560.0,2), ROUND(AVG(rpsf),4),"
     " ROUND(AVG(rpsf*rpsa/100.0),4) FROM bids").fetchone())

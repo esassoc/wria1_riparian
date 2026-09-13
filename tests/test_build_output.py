@@ -17,8 +17,15 @@ def html_text():
 
 def main():
     check(os.path.isdir(SITE), "site/ exists")
-    for rel in ["index.html", "data/bids.sqlite"]:
-        check(os.path.isfile(os.path.join(SITE, rel)), f"{rel} exists")
+    import glob, re as _re
+    check(os.path.isfile(os.path.join(SITE, "index.html")), "index.html exists")
+    gz_files = glob.glob(os.path.join(SITE, "data", "bids.*.sqlite.gz"))
+    check(len(gz_files) == 1, f"exactly one hashed bids.<hash>.sqlite.gz ships (found {gz_files})")
+    check(not os.path.isfile(os.path.join(SITE, "data", "bids.sqlite")), "no raw bids.sqlite ships")
+    gz_name = os.path.basename(gz_files[0])
+    check(_re.fullmatch(r"bids\.[0-9a-f]{8}\.sqlite\.gz", gz_name), f"hashed name pattern ok ({gz_name})")
+    gz_mb = os.path.getsize(gz_files[0]) / 1e6
+    check(gz_mb < 7, f"gzipped DB under 7 MB (got {gz_mb:.2f} MB)")
     check(not os.path.isfile(os.path.join(SITE, "data", "dashboard_data.json")),
           "dashboard_data.json no longer ships (folded into the SQLite)")
 
@@ -35,12 +42,20 @@ def main():
           "React production build is used, not development")
 
     html = html_text()
-    check("data/bids.sqlite" in html, "index.html fetches data/bids.sqlite")
+    check(f"const DB_URL = 'data/{gz_name}'" in html, "DB_URL points at the hashed gz file")
+    check(f'<link rel="preload" as="fetch" href="data/{gz_name}" crossorigin>' in html, "DB is preloaded")
+    check('sql-wasm.wasm" crossorigin>' in html, "sql.js wasm is preloaded")
+    check("DecompressionStream" in html, "page decompresses with DecompressionStream")
+    check("data/bids.sqlite.gz'" not in html.replace(f"data/{gz_name}", ""), "no un-hashed gz reference remains")
     check("bid_explorer_data.json" not in html, "no leftover bid_explorer_data.json fetch")
     check("dashboard_data.json" not in html, "no dashboard_data.json fetch in the page")
     check("Date.now()" not in html, "no Date.now() cache-buster on data fetches")
 
-    conn = sqlite3.connect(os.path.join(SITE, "data", "bids.sqlite"))
+    import gzip, tempfile
+    tmp_db = os.path.join(tempfile.gettempdir(), "bids_test_unpacked.sqlite")
+    with gzip.open(gz_files[0], "rb") as g, open(tmp_db, "wb") as out:
+        out.write(g.read())
+    conn = sqlite3.connect(tmp_db)
     n = conn.execute("SELECT COUNT(*) FROM bids").fetchone()[0]
     check(n == 30850, f"bids table has 30850 rows (got {n})")
 
@@ -63,7 +78,7 @@ def main():
     long_dp = conn.execute(
         "SELECT COUNT(*) FROM bids WHERE ROUND(sols, 3) != sols OR ROUND(slps, 3) != slps").fetchone()[0]
     check(long_dp == 0, f"sols/slps rounded to 3 dp (got {long_dp} rows with more)")
-    db_mb = os.path.getsize(os.path.join(SITE, "data", "bids.sqlite")) / 1e6
+    db_mb = os.path.getsize(tmp_db) / 1e6
     check(db_mb < 22, f"bids.sqlite under 22 MB raw (got {db_mb:.1f} MB)")
 
     rows = conn.execute("SELECT bid, rpsn, sols, slps, wet, rpsf FROM bids").fetchall()

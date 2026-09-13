@@ -4,6 +4,14 @@ import os, sys, sqlite3
 DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                   "site", "data", "bids.sqlite")
 
+import glob, gzip, tempfile
+def open_db():
+    gz = glob.glob(os.path.join(os.path.dirname(DB), "bids.*.sqlite.gz"))[0]
+    tmp = os.path.join(tempfile.gettempdir(), "bids_test_unpacked.sqlite")
+    with gzip.open(gz, "rb") as g, open(tmp, "wb") as out:
+        out.write(g.read())
+    return sqlite3.connect(tmp)
+
 def check(cond, msg):
     if not cond:
         print(f"FAIL: {msg}")
@@ -13,8 +21,7 @@ def check(cond, msg):
 LC_AREA = " + ".join(f"lc{i} * sqft" for i in range(9))
 
 def main():
-    check(os.path.isfile(DB), "bids.sqlite exists")
-    conn = sqlite3.connect(DB)
+    conn = open_db()
 
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     check("zones" in tables, "zones table exists")
