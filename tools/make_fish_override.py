@@ -17,8 +17,9 @@ Usage (from Final_Build/):
 
 Reads:
     TP_Split_JOIN_20260507.csv   (40 MB, GIS feature layer export, authoritative)
-    site/data/bids.sqlite        (must already be built -- supplies the current
-                                  scoring-table `fish` value per BID to diff against)
+    site/data/bids.<hash>.sqlite.gz  (the shipped build output -- must already be
+                                  built; supplies the current scoring-table `fish`
+                                  value per BID to diff against)
 
 Writes:
     data_overrides/fish_access_override.csv
@@ -27,16 +28,17 @@ Writes:
 """
 import csv
 import os
-import sqlite3
 import sys
 from datetime import date
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 
+sys.path.insert(0, os.path.join(ROOT_DIR, "tests"))
+from db_helpers import open_shipped_db
+
 SOURCE_CSV = os.path.join(ROOT_DIR, "TP_Split_JOIN_20260507.csv")
 SOURCE_DATE = "2026-05-07"  # date encoded in the source filename
-SQLITE_PATH = os.path.join(ROOT_DIR, "site", "data", "bids.sqlite")
 OUT_PATH = os.path.join(ROOT_DIR, "data_overrides", "fish_access_override.csv")
 
 
@@ -70,16 +72,11 @@ def load_gis_fish(csv_path):
 def main():
     if not os.path.isfile(SOURCE_CSV):
         sys.exit(f"Source GIS CSV not found: {SOURCE_CSV}")
-    if not os.path.isfile(SQLITE_PATH):
-        sys.exit(f"site/data/bids.sqlite not found -- run build_client_site.py "
-                  f"first (without the override applied) so there is a scoring-"
-                  f"table `fish` column to diff against: {SQLITE_PATH}")
-
     print(f"Reading GIS fish access from {os.path.basename(SOURCE_CSV)} ...")
     gis_fish = load_gis_fish(SOURCE_CSV)
     print(f"  {len(gis_fish):,} distinct BIDs in GIS export")
 
-    conn = sqlite3.connect(SQLITE_PATH)
+    conn = open_shipped_db("bids_fish_override.sqlite")
     rows = conn.execute("SELECT bid, fish FROM bids").fetchall()
     conn.close()
     print(f"  {len(rows):,} BIDs in bids table")

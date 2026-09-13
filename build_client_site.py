@@ -916,15 +916,15 @@ def main():
         raise RuntimeError("could not find the Babel standalone script tag to remove")
     html = precompile_jsx(html)
 
-    # --- 7. Update server requirement comment ---
-    html = html.replace(
-        "Note: Chrome blocks fetch() from file:// URLs. Use the server above or Firefox.",
-        "Multi-file site -- serve via HTTP (python -m http.server) or deploy to GitHub Pages.",
-    )
-
     # --- Create output directories ---
     for subdir in ["", "data", "vendor"]:
         os.makedirs(os.path.join(OUTPUT_DIR, subdir), exist_ok=True)
+
+    # --- Check the page's DB_URL literal + preload link BEFORE rebuilding the DB,
+    #     so a page we could not rewrite never deletes the good, shipped gz first. ---
+    n_refs = html.count("data/bids.sqlite.gz")
+    if n_refs < 2:
+        raise RuntimeError(f"expected DB_URL literal and preload link to reference data/bids.sqlite.gz, found {n_refs}")
 
     # --- Build SQLite database, gzip it, content-hash the filename ---
     data_dir = os.path.join(OUTPUT_DIR, "data")
@@ -944,9 +944,6 @@ def main():
     print(f"  Wrote data/{gz_name}: {len(gz_bytes)/1e6:.2f} MB gzipped (from {len(raw)/1e6:.1f} MB raw)")
 
     # --- Point the page at the hashed file (DB_URL literal + preload link) ---
-    n_refs = html.count("data/bids.sqlite.gz")
-    if n_refs < 2:
-        raise RuntimeError(f"expected DB_URL literal and preload link to reference data/bids.sqlite.gz, found {n_refs}")
     html = html.replace("data/bids.sqlite.gz", f"data/{gz_name}")
 
     # --- Vendor scripts: copy the committed, pinned files (see tools/fetch_vendor.py) ---

@@ -13,7 +13,9 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # false, like GitHub's Pages starter workflow: an in-flight run must not be
+  # cancelled between upload-pages-artifact and deploy-pages.
+  cancel-in-progress: false
 
 jobs:
   deploy:

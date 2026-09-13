@@ -2,4 +2,7 @@
 # Keep their exact upstream bytes -- no CRLF normalization on any platform,
 # or a Windows checkout with core.autocrlf=true would rewrite the .js files'
 # line endings and break the sha256 checks in tests/test_build_output.py.
+# BOTH copies are hashed against vendor/MANIFEST.json: the source copy in vendor/
+# and the built copy the build script writes into site/vendor/, so both are listed.
 vendor/* -text
+site/vendor/* -text

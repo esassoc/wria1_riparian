@@ -1,16 +1,8 @@
 """Assertions on bids.sqft and the merged zones table. Run: python tests/test_zone_stats.py"""
-import os, sys, sqlite3
+import os, sys
 
-DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                  "site", "data", "bids.sqlite")
-
-import glob, gzip, tempfile
-def open_db():
-    gz = glob.glob(os.path.join(os.path.dirname(DB), "bids.*.sqlite.gz"))[0]
-    tmp = os.path.join(tempfile.gettempdir(), "bids_test_unpacked.sqlite")
-    with gzip.open(gz, "rb") as g, open(tmp, "wb") as out:
-        out.write(g.read())
-    return sqlite3.connect(tmp)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from db_helpers import open_shipped_db
 
 def check(cond, msg):
     if not cond:
@@ -21,7 +13,7 @@ def check(cond, msg):
 LC_AREA = " + ".join(f"lc{i} * sqft" for i in range(9))
 
 def main():
-    conn = open_db()
+    conn = open_shipped_db()
 
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     check("zones" in tables, "zones table exists")

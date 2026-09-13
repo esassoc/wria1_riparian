@@ -8,3 +8,8 @@ __pycache__/
 *.pyc
 .sdd/
 .claude/
+
+# Subagent-driven-development working files (the ledger progress.md stays tracked)
+.superpowers/sdd/*.diff
+.superpowers/sdd/*-brief.md
+.superpowers/sdd/*-report.md

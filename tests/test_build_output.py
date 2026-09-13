@@ -1,5 +1,8 @@
 """Assertions on the built client site. Run: python tests/test_build_output.py"""
-import os, sys, csv, sqlite3
+import os, sys, csv
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from db_helpers import open_shipped_db
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE = os.path.join(ROOT, "site")
@@ -99,11 +102,7 @@ def main():
     check("dashboard_data.json" not in html, "no dashboard_data.json fetch in the page")
     check("Date.now()" not in html, "no Date.now() cache-buster on data fetches")
 
-    import gzip, tempfile
-    tmp_db = os.path.join(tempfile.gettempdir(), "bids_test_unpacked.sqlite")
-    with gzip.open(gz_files[0], "rb") as g, open(tmp_db, "wb") as out:
-        out.write(g.read())
-    conn = sqlite3.connect(tmp_db)
+    conn = open_shipped_db()
     n = conn.execute("SELECT COUNT(*) FROM bids").fetchone()[0]
     check(n == 30850, f"bids table has 30850 rows (got {n})")
 
@@ -126,7 +125,8 @@ def main():
     long_dp = conn.execute(
         "SELECT COUNT(*) FROM bids WHERE ROUND(sols, 3) != sols OR ROUND(slps, 3) != slps").fetchone()[0]
     check(long_dp == 0, f"sols/slps rounded to 3 dp (got {long_dp} rows with more)")
-    db_mb = os.path.getsize(tmp_db) / 1e6
+    # raw (unpacked) size of the shipped DB -- ask the connection where its file is
+    db_mb = os.path.getsize(conn.execute("PRAGMA database_list").fetchone()[2]) / 1e6
     check(db_mb < 22, f"bids.sqlite under 22 MB raw (got {db_mb:.1f} MB)")
 
     rows = conn.execute("SELECT bid, rpsn, sols, slps, wet, rpsf FROM bids").fetchall()

@@ -26,33 +26,48 @@ analytical summary tabs.
 | `client_dashboard.html` | The forked source. **The only file you hand-edit.** |
 | `build_client_site.py` | Build script. Owns the SQLite schema. Run it after any edit. |
 | `BID_Scores_Calculated_20260507.csv` | Build input. S-track score components (`rpsn`/`sols`/`slps`/`rpsf`/`rpsa`), joined onto every BID by `build_client_site.py`. |
-| `BID_ZID_LC_20260501.csv` | Build input. Zone-level landcover and canopy-height source; also rebuilds `waterbody_bids` directly (see §11, Fix 2) and feeds the canopy-height clamp (§11, Fix 3). ~433 MB - never copied into `site/`. |
+| `BID_ZID_LC_20260501.csv` | **Not a build input any more.** Source for `data_cache/lc_derived_20260501.json` only; needed solely for `--refresh-lc-cache`; git-ignored. Zone-level landcover and canopy-height source; also rebuilds `waterbody_bids` (see §11, Fix 2) and feeds the canopy-height clamp (§11, Fix 3). ~433 MB - never copied into `site/`. |
 | `data_overrides/fish_access_override.csv` | Build input. A small, auditable, committed CSV (`bid,fish_gis,fish_scoring`) applied at build time so `tier`/`fish` in the shipped dashboard correct 104 banks against the GIS-authoritative layer (see §11, Fix 1). Regenerate with `tools/make_fish_override.py` whenever the source files are refreshed. |
-| `tools/make_fish_override.py` | One-off generator for `fish_access_override.csv` (not part of the build itself). Diffs `TP_Split_JOIN_20260507.csv`'s `Fish_simple` against `site/data/bids.sqlite`'s current `fish` column. |
+| `tools/make_fish_override.py` | One-off generator for `fish_access_override.csv` (not part of the build itself). Diffs `TP_Split_JOIN_20260507.csv`'s `Fish_simple` against the current `fish` column in the shipped `site/data/bids.<hash>.sqlite.gz` (unpacked via `tests/db_helpers.py`). |
 | `site/` | Build output. This is what gets pushed to Pages. Never hand-edit. |
 | `tests/test_build_output.py` | Asserts the built site is correct and leaks nothing internal. |
 | `tests/test_visual_polish.py` | Asserts the September 2026 visual-polish contract holds: no brand leaks, no abbreviations, no dead code, no emoji, no mojibake. |
 | `tests/test_zone_stats.py` | Asserts the area and zone-composition data reconciles. |
 | `tests/ground_truth.py` | Prints expected values for browser-side spot checks. |
+| `tests/run_all.py` | Runs every test script above; the one command to run after a build. |
+| `tests/db_helpers.py` | Shared helper that unpacks the shipped `bids.<hash>.sqlite.gz` to a temp file and returns a connection. Used by the tests and by `tools/make_fish_override.py`. |
+| `data_cache/lc_derived_20260501.json` | Committed cache of everything the build needs out of `BID_ZID_LC_20260501.csv`. Regenerate with `python build_client_site.py --refresh-lc-cache`. |
+| `vendor/` + `vendor/MANIFEST.json` | Committed, pinned third-party scripts (React, ReactDOM, prop-types, Recharts, sql.js + wasm) with their sha256s. Copied into `site/vendor/` by the build; both copies are hash-checked. |
+| `tools/fetch_vendor.py` | Re-downloads `vendor/` from the pinned upstream URLs and rewrites `MANIFEST.json`. Only needed when a vendor version changes. |
+| `package.json` / `package-lock.json` | Node dev dependencies (Tailwind CLI, Babel) used only at build time. `npm install` once per machine. |
+| `tailwind.config.js` | Tailwind content/theme config for the build-time CSS compile. |
+| `tools/tailwind.in.css` | Tailwind entry stylesheet compiled into the page's inline `<style id="tw">`. |
+| `tools/precompile.mjs` | Babel JSX -> JS precompile step (replaces the in-browser Babel runtime). |
+| `.github/workflows/pages.yml` | GitHub Actions workflow that publishes `site/` to Pages on any push to `main` touching `site/**`. |
+| `.gitattributes` | Marks `vendor/*` and `site/vendor/*` binary-exact (`-text`) so a Windows clone cannot CRLF-rewrite them and break the sha256 checks. |
 | `docs/` | Spec, implementation plan, verification record. |
 | `.superpowers/sdd/progress.md` | Full task-by-task build log, every bug found and fixed. |
 
 To rebuild:
 
 ```bash
-cd "U:/GIS/GIS/Projects/2024xxx/D202401511_WRIA_1_Riparian_Needs_Assessment/05_Code/Final_Build" && python build_client_site.py && python tests/test_build_output.py && python tests/test_zone_stats.py
+cd "U:/GIS/GIS/Projects/2024xxx/D202401511_WRIA_1_Riparian_Needs_Assessment/05_Code/Final_Build"
+npm install            # prerequisite, once per machine
+python build_client_site.py
+python tests/run_all.py
 ```
 
 Build inputs consumed automatically by `build_client_site.py` (no separate step needed):
-`BID_Scores_Calculated_20260507.csv`, `BID_ZID_LC_20260501.csv`, and
-`data_overrides/fish_access_override.csv`. Only regenerate the last of those by hand, and only
-when `TP_Split_JOIN_20260507.csv` or the scoring CSV is refreshed:
+`BID_Scores_Calculated_20260507.csv`, `data_cache/lc_derived_20260501.json`, and
+`data_overrides/fish_access_override.csv`. `BID_ZID_LC_20260501.csv` is **not** among them —
+it is read only under `--refresh-lc-cache`, to regenerate that cache. Only regenerate the fish
+override by hand, and only when `TP_Split_JOIN_20260507.csv` or the scoring CSV is refreshed:
 
 ```bash
 python tools/make_fish_override.py
 ```
 
-Site output is ~35 MB. **Never run a bundler** — this ships as a multi-file site only.
+Site output is ~6.6 MB (one gzipped SQLite ~5.0 MB, self-hosted vendor scripts ~1.3 MB, and `index.html` ~0.24 MB). **Never run a bundler** — this ships as a multi-file site only.
 
 ## 3. Fork, not shared source
 
@@ -178,8 +193,9 @@ Apply-to-render is **14–16 ms**, about 30× inside the 500 ms budget. Two thin
 work: collapsed sections render nothing and therefore query nothing, and every statistic is
 a `GROUP BY` in SQLite rather than JavaScript over 30,850 objects.
 
-The shipped page also uses React **production** builds (the source uses development builds
-for their warnings).
+The page uses React **production** builds throughout: `client_dashboard.html` itself loads
+`vendor/react.production.min.js` and `vendor/react-dom.production.min.js`, so there is no
+dev-to-prod swap anywhere in the build.
 
 ## 8. URLs and AGOL integration
 
@@ -461,6 +477,10 @@ the tablet preset in this task's verification pass.
    git commit -m "..."
    git push
    ```
+
+   The content hash in `site/data/bids.<hash>.sqlite.gz` is deterministic **per machine
+   only** — it derives from the input files' mtimes, so a fresh clone rebuilds to a different
+   hash even with identical data; always build and commit `site/` from the same checkout.
 
    The push triggers the `pages.yml` GitHub Actions workflow (path-filtered to `site/**`),
    which publishes `site/` to GitHub Pages. A commit that touches only docs, tests, or source
