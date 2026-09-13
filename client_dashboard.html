@@ -226,7 +226,14 @@
         ? sp[0].values.map(([M, D, C, FH, SPTH, SQFT, domain, zone]) => ({ M, D, C, FH, SPTH, SQFT, domain, zone }))
         : [];
       const metaRows = db.exec("SELECT key, value FROM lab_meta");
-      const meta = Object.fromEntries((metaRows.length ? metaRows[0].values : []).map(([k, v]) => [k, JSON.parse(v)]));
+      const meta = {};
+      (metaRows.length ? metaRows[0].values : []).forEach(([k, v]) => {
+        try {
+          meta[k] = JSON.parse(v);
+        } catch (e) {
+          console.warn(`lab_meta: value for ${k} is not JSON; ignored`);
+        }
+      });
       return { sensitivity: { sample_polygons }, solar: { solar_push_stats: meta.solar_push_stats || null } };
     }
 

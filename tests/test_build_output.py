@@ -118,6 +118,16 @@ def main():
     check(abs(sps["mean"] - mean_sols) < 0.001, f"solar_push_stats.mean matches AVG(sols) ({sps['mean']} vs {mean_sols:.4f})")
     check(sps["min"] <= sps["p50"] <= sps["max"], "solar percentiles are ordered")
 
+    bad_meta = []
+    for k, v in conn.execute("SELECT key, value FROM lab_meta"):
+        try:
+            _json.loads(v)
+        except Exception:
+            bad_meta.append(k)
+    check(not bad_meta, f"every lab_meta.value is valid JSON (bad: {bad_meta})")
+    keys = {r[0] for r in conn.execute("SELECT key FROM lab_meta")}
+    check({"solar_push_stats", "generated", "source_meta"} <= keys, f"lab_meta has the three expected keys (got {sorted(keys)})")
+
     # --- Fix 2: waterbody_bids retains the 4 previously-dropped BIDs ---
     for bid in ("L667_2", "L677_2", "L684_1", "L105_2"):
         row = conn.execute("SELECT bid FROM waterbody_bids WHERE bid = ?", (bid,)).fetchone()
