@@ -3018,6 +3018,22 @@
     }
 
     function AcreStackBar({ sel, wria, title, attr, display = v => v }) {
+      // In-segment labels are shown only when the whole label fits inside its segment;
+      // otherwise the segment stays unlabelled and the legend + hover carry the name.
+      // The bar is fluid, so the segment's pixel width is measured, not assumed.
+      const barRef = React.useRef(null);
+      const [barW, setBarW] = React.useState(0);
+      React.useEffect(() => {
+        const el = barRef.current;
+        if (!el) return;
+        setBarW(el.getBoundingClientRect().width);
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(entries => setBarW(entries[0].contentRect.width));
+        ro.observe(el);
+        return () => ro.disconnect();
+      }, []);
+      const SEG_FONT_PX = 10.5, SEG_CHAR_W = SEG_FONT_PX * 0.62, SEG_PAD_PX = 8; // IBM Plex Mono ~0.6em per glyph
+      const labelFits = (text, pct) => barW > 0 && text.length * SEG_CHAR_W + SEG_PAD_PX <= barW * pct / 100;
       const total = sel.reduce((a, b) => a + b.acres, 0);
       const wTotal = wria ? wria.reduce((a, b) => a + b.acres, 0) : 0;
 
@@ -3029,8 +3045,6 @@
       // same swatch on different tiers in the solid and ghost bars, so the ghost
       // comparison would silently compare the wrong categories.
       // One map, built from the union of both key sets in a stable order.
-      // Plain const rather than useMemo: this is a leaf component rendered in a
-      // list, and adding a hook here would be one more thing to keep in order.
       const keyOrder = [...sel.map(r => r.key)];
       (wria || []).forEach(r => { if (!keyOrder.includes(r.key)) keyOrder.push(r.key); });
       const colorMap = new Map(keyOrder.map(k => [k, colorOf(attr, k)]));
@@ -3048,13 +3062,13 @@
       }));
       const light = isLightChipColor;
       const bar = (segs, h, ghost) => (
-        <div style={{ display: 'flex', height: h, borderRadius: 3, overflow: 'hidden', gap: 2, background: ghost ? 'none' : THEME.line2 }}>
+        <div ref={ghost ? undefined : barRef} style={{ display: 'flex', height: h, borderRadius: 3, overflow: 'hidden', gap: 2, background: ghost ? 'none' : THEME.line2 }}>
           {segs.map(s => ghost
             ? <i key={s.key} style={{ display: 'block', width: `${s.pct}%`, border: `1px solid ${THEME.ghost}`, borderRadius: 2 }} title={`WRIA · ${display(s.key)}: ${s.pct.toFixed(1)}%`} />
             : <i key={s.key} className={light(s.color) ? 'lt' : ''} title={`${display(s.key)}: ${fmtAcres(s.acres)} acres (${s.pct.toFixed(1)}%)`}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', font: '500 10.5px var(--font-m)',
                   color: light(s.color) ? THEME.ink : '#fff', background: s.color, width: `${s.pct}%`, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                {s.pct >= 8 ? `${display(s.key)} ${s.pct.toFixed(0)}%` : ''}
+                {(() => { const t = `${display(s.key)} ${s.pct.toFixed(0)}%`; return labelFits(t, s.pct) ? t : ''; })()}
               </i>)}
         </div>
       );
