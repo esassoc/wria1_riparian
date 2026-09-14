@@ -192,19 +192,52 @@ def main():
     print(f'\nwrote {a.out_scores}')
 
     # ---------------------------------------------------------------- join table
-    jn = pd.DataFrame({'BID': out['BID']})
-    jn['AspectCircMean'] = j['aspect_circ_mean'].round(1)          # replaces AspectMEANBID
-    jn['AspectMEANBID_old'] = src['AspectMEANBID']
-    jn['AspectResultantR'] = j['resultant_r'].round(3)             # 1 = consistent, 0 = scattered
-    jn['AspectClass'] = j['aspect_class_circ']
-    jn['AspectCellCount'] = j['cell_count']
-    for c in AFFECTED:
-        jn[c] = out[c]
-        jn[c + '_old'] = src[c]
-    jn['RP_final_delta'] = (out['RP_final'] - src['RP_final']).round(2)
-    jn['CI_delta'] = (out['CI'] - src['CI']).round(1)
+    # Field names kept <= 31 chars and free of leading digits so they survive a join
+    # into a file geodatabase / hosted feature layer unmangled.
+    jn = pd.DataFrame({
+        'BID': out['BID'],
+        'AspectDeg_New': j['aspect_circ_mean'].round(1),      # circular mean; replaces AspectMEANBID
+        'AspectDeg_Old': src['AspectMEANBID'],
+        'AspectClass_New': j['aspect_class_circ'],
+        'AspectR': j['resultant_r'].round(3),                 # 1 = cells agree, 0 = scattered
+        'AspectCells': j['cell_count'],
+        'NorthFactor_New': out['aspect_north_factor'],
+        'NorthFactor_Old': src['aspect_north_factor'],
+        'CombSolar_New': out['combined_solar'],
+        'CombSolar_Old': src['combined_solar'],
+        'SolarRisk_New': out['solar_risk'],
+        'SolarRisk_Old': src['solar_risk'],
+        'SolarPush_New': out['solar_push'],
+        'SolarPush_Old': src['solar_push'],
+        'RPfinal_New': out['RP_final'],
+        'RPfinal_Old': src['RP_final'],
+        'RPfinal_Delta': (out['RP_final'] - src['RP_final']).round(2),
+        'RPSfinal_New': out['RP_S_final'],
+        'RPSfinal_Old': src['RP_S_final'],
+        'CI_New': out['CI'],
+        'CI_Old': src['CI'],
+        'CI_Delta': (out['CI'] - src['CI']).round(1),
+    })
+
+    # Banks present in the aspect recompute but never scored (waterbody / out-of-scope
+    # BIDs the dashboard excludes) still get their corrected aspect, with the score
+    # columns left blank, so this one file joins cleanly onto the full BID layer.
+    extra = asp[~asp['BID'].isin(jn['BID'])]
+    if len(extra):
+        pad = pd.DataFrame({
+            'BID': extra['BID'],
+            'AspectDeg_New': extra['aspect_circ_mean'].round(1),
+            'AspectClass_New': extra['aspect_class_circ'],
+            'AspectR': extra['resultant_r'].round(3),
+            'AspectCells': extra['cell_count'],
+            'NorthFactor_New': extra['mean_cos'].round(3),
+        })
+        jn = pd.concat([jn, pad], ignore_index=True)
+        print(f'  + {len(extra):,} unscored BIDs carried with aspect only (no score columns)')
+
+    jn = jn.sort_values('BID')
     jn.to_csv(a.out_join, index=False)
-    print(f'wrote {a.out_join}  ({len(jn):,} rows, join on BID)')
+    print(f'wrote {a.out_join}  ({len(jn):,} rows, {len(jn.columns)} fields, join on BID)')
 
 
 if __name__ == '__main__':
