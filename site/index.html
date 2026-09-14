@@ -3066,6 +3066,40 @@ function AcreStackBar({ sel, wria, title, attr, display = (v) => v }) {
 
 }
 
+
+
+
+
+function TopScroll({ children }) {
+  const topRef = React.useRef(null),bodyRef = React.useRef(null);
+  const [dims, setDims] = React.useState({ scroll: 0, client: 0 });
+  React.useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const update = () => setDims((d) => d.scroll === body.scrollWidth && d.client === body.clientWidth ?
+    d : { scroll: body.scrollWidth, client: body.clientWidth });
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(update);
+    ro.observe(body);
+    if (body.firstElementChild) ro.observe(body.firstElementChild);
+    return () => ro.disconnect();
+  }, []);
+  const mirror = (from, to) => () => {
+    if (from.current && to.current && to.current.scrollLeft !== from.current.scrollLeft) to.current.scrollLeft = from.current.scrollLeft;
+  };
+  const needsBar = dims.scroll > dims.client + 1;
+  return (
+    React.createElement(React.Fragment, null,
+    React.createElement("div", { ref: topRef, onScroll: mirror(topRef, bodyRef), "aria-hidden": "true",
+      style: { overflowX: needsBar ? 'auto' : 'hidden', overflowY: 'hidden', height: needsBar ? 14 : 0, marginBottom: needsBar ? 2 : 0 } },
+    React.createElement("div", { style: { width: dims.scroll, height: 1 } })
+    ),
+    React.createElement("div", { ref: bodyRef, onScroll: mirror(bodyRef, topRef), style: { overflowX: 'auto' } }, children)
+    ));
+
+}
+
 function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters }) {
   const db = sharedBidData?.db || null;
   const bidLoading = !db;
@@ -3639,7 +3673,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
     React.createElement("h3", null, "Results ", React.createElement(Badge, null, filteredCount.toLocaleString())),
     React.createElement(Btn, { icon: "download", onClick: exportCSV }, "Export CSV")
     ),
-    React.createElement("div", { style: { overflowX: 'auto' } },
+    React.createElement(TopScroll, null,
     React.createElement("table", { className: "tbl" },
     React.createElement("thead", null, React.createElement("tr", null,
     COLUMNS.map((col) =>

@@ -3084,6 +3084,40 @@
       );
     }
 
+    // Horizontal scroller with a second, synced scrollbar ABOVE the content, so a wide
+    // table can be panned without scrolling to its bottom edge first. The top strip is a
+    // dummy element sized to the content's scrollWidth; both strips mirror each other's
+    // scrollLeft. Collapses to nothing when the content fits.
+    function TopScroll({ children }) {
+      const topRef = React.useRef(null), bodyRef = React.useRef(null);
+      const [dims, setDims] = React.useState({ scroll: 0, client: 0 });
+      React.useEffect(() => {
+        const body = bodyRef.current;
+        if (!body) return;
+        const update = () => setDims(d => (d.scroll === body.scrollWidth && d.client === body.clientWidth)
+          ? d : { scroll: body.scrollWidth, client: body.clientWidth });
+        update();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(update);
+        ro.observe(body);
+        if (body.firstElementChild) ro.observe(body.firstElementChild);
+        return () => ro.disconnect();
+      }, []);
+      const mirror = (from, to) => () => {
+        if (from.current && to.current && to.current.scrollLeft !== from.current.scrollLeft) to.current.scrollLeft = from.current.scrollLeft;
+      };
+      const needsBar = dims.scroll > dims.client + 1;
+      return (
+        <>
+          <div ref={topRef} onScroll={mirror(topRef, bodyRef)} aria-hidden="true"
+            style={{ overflowX: needsBar ? 'auto' : 'hidden', overflowY: 'hidden', height: needsBar ? 14 : 0, marginBottom: needsBar ? 2 : 0 }}>
+            <div style={{ width: dims.scroll, height: 1 }} />
+          </div>
+          <div ref={bodyRef} onScroll={mirror(bodyRef, topRef)} style={{ overflowX: 'auto' }}>{children}</div>
+        </>
+      );
+    }
+
     function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters }) {
       const db = sharedBidData?.db || null;
       const bidLoading = !db;
@@ -3657,7 +3691,7 @@
                   <h3>Results <Badge>{filteredCount.toLocaleString()}</Badge></h3>
                   <Btn icon="download" onClick={exportCSV}>Export CSV</Btn>
                 </div>
-                <div style={{ overflowX: 'auto' }}>
+                <TopScroll>
                   <table className="tbl">
                     <thead><tr>
                       {COLUMNS.map(col => (
@@ -3687,7 +3721,7 @@
                       {pageData.length === 0 && <tr><td colSpan={COLUMNS.length} style={{ textAlign: 'center', padding: 16, color: THEME.muted }}>No banks match the current filters</td></tr>}
                     </tbody>
                   </table>
-                </div>
+                </TopScroll>
                 {totalPages > 1 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', fontSize: 12, color: THEME.muted, borderTop: `1px solid ${THEME.line2}` }}>
                     <Btn variant="ghost" sm onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}>‹ Prev</Btn>
