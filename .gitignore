@@ -19,3 +19,4 @@ docs/
 aspect_circular_by_bid_*.csv
 aspect_rescore_join_*.csv
 aspect_circular_run.log
+aspect_gis_update_*.csv

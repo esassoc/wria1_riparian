@@ -362,8 +362,33 @@ python tools/aspect_circular_zonal.py   --banks "..._Project\Reach_forReview.gd
 
 python tools/rescore_aspect.py   --scores BID_Scores_Calculated_20260507.csv   --aspect aspect_circular_by_bid_YYYYMMDD.csv   --source-gdb "..._Project\Reach_forReview.gdb" --source-layer TP_Split   --out-scores BID_Scores_Calculated_YYYYMMDD_circaspect.csv   --out-join   aspect_rescore_join_YYYYMMDD.csv
 ```
-`--out-join` is the BID-join table for the hosted GIS layer (new and `_old` values side by
-side, plus `RP_final_delta` / `CI_delta`). Requires `geopandas`, `pyogrio`, `rasterio`.
+Two join tables come out of the rescore, both keyed on `BID` and both covering all 32,144
+banks (the 1,294 unscored ones carry corrected aspect with blank score columns, so either
+file joins onto the full bank layer):
+
+- `--out-join` — audit table. New and old values side by side plus `RPfinal_Delta` /
+  `CI_Delta` and an `AspectR` confidence column. Use it to review what moved.
+- `--out-join-update` — slim update table. `BID` plus **only the nine fields this fix
+  changes**, each named `<existing field name>_new`, so it maps field-to-field onto the
+  hosted layer with no renaming:
+
+  | Field | `FinalWebMap.gdb\Banks` | `ExportsForWebmap_20260312.gdb\BID_Scores` |
+  |---|---|---|
+  | `AspectMEANBID_new` | updates | add |
+  | `aspect_north_factor_new` | add | add |
+  | `combined_solar_new` | add | add |
+  | `solar_risk_new` | add | updates |
+  | `solar_push_new` | add | updates |
+  | `RP_solar_only_new` | add | updates |
+  | `RP_final_new` | add | updates |
+  | `RP_S_final_new` | add | updates |
+  | `CI_new` | add | add |
+
+  Everything else in the scoring table is untouched by this fix and must NOT be rewritten:
+  `RP_norm`, the whole area track (`RP_area_*`, `Area_Mult`), `slope_risk` / `slope_push`,
+  `wetland_push`, `RP_S_norm` and `Priority_Tier` are all independent of aspect.
+
+Requires `geopandas`, `pyogrio`, `rasterio`.
 
 **Caveat worth carrying forward.** Even the circular mean is a weak descriptor here. The
 mean resultant length (1 = all cells face one way, 0 = uniform) has a **median of 0.39**, and

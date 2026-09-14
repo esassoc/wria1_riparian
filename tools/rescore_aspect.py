@@ -103,7 +103,12 @@ def main():
                          'combined_solar by up to 0.5 and makes validation ambiguous.')
     ap.add_argument('--source-layer', default='TP_Split')
     ap.add_argument('--out-scores', required=True)
-    ap.add_argument('--out-join', required=True)
+    ap.add_argument('--out-join', required=True,
+                    help='Full audit table: new and old values side by side plus deltas.')
+    ap.add_argument('--out-join-update', default=None,
+                    help='Slim GIS update table: BID plus ONLY the changed fields, each named '
+                         '<existing field name>_new so it joins onto the hosted layer and maps '
+                         'field-to-field with no renaming.')
     ap.add_argument('--factor', default='mean_cos', choices=['mean_cos', 'cos_circ_mean'],
                     help="mean_cos (default, recommended): cell-wise mean of cos(aspect). "
                          "cos_circ_mean: cos of the circular mean; ignores how scattered the bank is.")
@@ -230,7 +235,9 @@ def main():
             'AspectClass_New': extra['aspect_class_circ'],
             'AspectR': extra['resultant_r'].round(3),
             'AspectCells': extra['cell_count'],
-            'NorthFactor_New': extra['mean_cos'].round(3),
+            # 0.0, not blank: a bank with no sloped cells has a neutral north factor,
+            # matching how the scoring treats an unknown aspect.
+            'NorthFactor_New': extra['mean_cos'].fillna(0.0).round(3),
         })
         jn = pd.concat([jn, pad], ignore_index=True)
         print(f'  + {len(extra):,} unscored BIDs carried with aspect only (no score columns)')
@@ -238,6 +245,31 @@ def main():
     jn = jn.sort_values('BID')
     jn.to_csv(a.out_join, index=False)
     print(f'wrote {a.out_join}  ({len(jn):,} rows, {len(jn.columns)} fields, join on BID)')
+
+    # ------------------------------------------------- slim GIS update table
+    # Only the fields the correction actually changes, each carrying the name it has
+    # in the source scoring table (and therefore in the hosted layers derived from it)
+    # with a _new suffix. Everything else in the scores is untouched by this fix:
+    # RP_norm, the area track, slope_risk/slope_push, wetland_push, RP_S_norm and
+    # Priority_Tier are all independent of aspect.
+    if a.out_join_update:
+        upd = pd.DataFrame({'BID': out['BID']})
+        upd['AspectMEANBID_new'] = j['aspect_circ_mean'].round(1)
+        for c in AFFECTED:
+            upd[c + '_new'] = out[c]
+        extra_u = asp[~asp['BID'].isin(upd['BID'])]
+        if len(extra_u):
+            # fillna(0.0) matches the scoring convention: a bank with no sloped cells has
+            # a neutral north factor, not a missing one. AspectMEANBID_new stays blank
+            # there, because "no direction" is the honest value for a bearing.
+            pad_u = pd.DataFrame({'BID': extra_u['BID'],
+                                  'AspectMEANBID_new': extra_u['aspect_circ_mean'].round(1),
+                                  'aspect_north_factor_new': extra_u['mean_cos'].fillna(0.0).round(3)})
+            upd = pd.concat([upd, pad_u], ignore_index=True)
+        upd = upd.sort_values('BID')
+        upd.to_csv(a.out_join_update, index=False)
+        print(f'wrote {a.out_join_update}  ({len(upd):,} rows, {len(upd.columns)} fields: '
+              f'{", ".join(upd.columns)})')
 
 
 if __name__ == '__main__':
