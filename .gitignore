@@ -9,7 +9,8 @@ __pycache__/
 .sdd/
 .claude/
 
-# Subagent-driven-development working files (the ledger progress.md stays tracked)
-.superpowers/sdd/*.diff
-.superpowers/sdd/*-brief.md
-.superpowers/sdd/*-report.md
+# Project-internal material kept locally only: design specs, plans, audits, review
+# records and the working ledger. The repo carries only what builds, tests and
+# deploys the dashboard (CLIENT_DASHBOARD_NOTES.md is the operator how-to and stays).
+docs/
+.superpowers/
