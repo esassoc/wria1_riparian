@@ -3418,16 +3418,17 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
   const COLUMNS = [
   { key: 'bid', label: 'BID', w: 80, num: true, fmt: (v) => v },
   { key: 'str', label: 'Stream', w: 100, fmt: (v) => v || '\u2014' },
-  { key: 'rpsf', label: 'Restoration Priority', term: 'rp', w: 90, num: true, fmt: (v) => v?.toFixed(1) },
-  { key: 'rpsa', label: 'Area percentile', term: 'percentile', w: 90, num: true, fmt: (v) => v?.toFixed(1) },
-  { key: 'ci', label: 'Composite Index', term: 'ci', w: 90, num: true, fmt: (v) => v?.toFixed(1) },
+
+  { key: 'rpsf', label: 'Restoration Priority', stack: ['Restoration', 'Priority'], term: 'rp', w: 74, num: true, fmt: (v) => v?.toFixed(1) },
+  { key: 'rpsa', label: 'Area percentile', stack: ['Area', 'percentile'], term: 'percentile', w: 68, num: true, fmt: (v) => v?.toFixed(1) },
+  { key: 'ci', label: 'Composite Index', stack: ['Composite', 'Index'], term: 'ci', w: 68, num: true, fmt: (v) => v?.toFixed(1) },
   { key: 'tier', label: 'Tier', term: 'tier', w: 50, fmt: (v) => React.createElement(TierPill, { tier: v }) },
   { key: 'srz', label: 'Salmon Recovery Zone', w: 150, fmt: (v) => displaySrz(v) },
   { key: 'compDesc', label: 'Composition', term: 'comp', w: 100, fmt: (v) => v },
-  { key: 'mh', label: 'Canopy height (ft)', w: 90, num: true, fmt: (v) => v > 0 ? v?.toFixed(0) : '\u2014' },
+  { key: 'mh', label: 'Canopy height (ft)', stack: ['Canopy', 'height (ft)'], w: 66, num: true, fmt: (v) => v > 0 ? v?.toFixed(0) : '\u2014' },
   { key: 'pf', label: '% Forest', w: 60, num: true, fmt: (v) => v?.toFixed(0) },
   { key: 'sols', label: 'Solar push', term: 'push', w: 70, num: true, fmt: (v) => v?.toFixed(1) },
-  { key: 'tic', label: 'Temperature category', term: 'icat', w: 110, fmt: (v) => v ? `Category ${v}` : '\u2014' },
+  { key: 'tic', label: 'Temperature category', stack: ['Temperature', 'category'], term: 'icat', w: 84, fmt: (v) => v ? `Category ${v}` : '\u2014' },
   { key: 'sps', label: 'Salmon species', w: 160, fmt: (v) => v ? v.replace(/Pink \(Odd Year\)/g, 'Pink (odd year)') : '\u2014' },
   { key: 'mgr', label: 'Owner', w: 90, fmt: (v) => v }];
 
@@ -3643,8 +3644,11 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
     React.createElement("thead", null, React.createElement("tr", null,
     COLUMNS.map((col) =>
     React.createElement("th", { key: col.key, onClick: () => handleSort(col.key), className: `${col.num ? 'n' : ''} ${sortCol === col.key ? 'sorted' : ''}`,
-      style: { minWidth: col.w, cursor: 'pointer', userSelect: 'none' } },
-    col.term ? React.createElement(Term, { id: col.term }, col.label) : col.label,
+      style: { minWidth: col.w, cursor: 'pointer', userSelect: 'none', ...(col.stack ? { whiteSpace: 'normal', lineHeight: 1.25, verticalAlign: 'bottom' } : {}) } },
+    (() => {
+      const text = col.stack ? React.createElement(React.Fragment, null, col.stack[0], React.createElement("br", null), col.stack[1]) : col.label;
+      return col.term ? React.createElement(Term, { id: col.term }, text) : text;
+    })(),
     sortCol === col.key && React.createElement("span", { style: { marginLeft: 3 } }, sortAsc ? '\u25B2' : '\u25BC')
     )
     )
