@@ -358,9 +358,9 @@ from Chinook / Nooksack / temperature / fish-bearing flags with no dependence on
 
 **To regenerate:**
 ```
-python tools/aspect_circular_zonal.py   --banks "..._Project\Reach_forReview.gdb" --layer TP_Split   --raster "..._Project\Rasters\Elevationspect1.tif"   --table  "..._Project\Reach_forReview.gdb" --table-layer AspectByBID   --out aspect_circular_by_bid_YYYYMMDD.csv
+python tools/aspect_circular_zonal.py   --banks "..._Project\Reach_forReview.gdb" --layer TP_Split   --raster "..._Project\Rasters\Elevationspect1.tif"   --table  "..._Project\Reach_forReview.gdb" --table-layer AspectByBID   --out aspect_circular_by_bid_YYYYMMDD.csv
 
-python tools/rescore_aspect.py   --scores BID_Scores_Calculated_20260507.csv   --aspect aspect_circular_by_bid_YYYYMMDD.csv   --source-gdb "..._Project\Reach_forReview.gdb" --source-layer TP_Split   --out-scores BID_Scores_Calculated_YYYYMMDD_circaspect.csv   --out-join   aspect_rescore_join_YYYYMMDD.csv
+python tools/rescore_aspect.py   --scores BID_Scores_Calculated_20260507.csv   --aspect aspect_circular_by_bid_YYYYMMDD.csv   --source-gdb "..._Project\Reach_forReview.gdb" --source-layer TP_Split   --out-scores BID_Scores_Calculated_YYYYMMDD_circaspect.csv   --out-join   aspect_rescore_join_YYYYMMDD.csv
 ```
 Two join tables come out of the rescore, both keyed on `BID` and both covering all 32,144
 banks (the 1,294 unscored ones carry corrected aspect with blank score columns, so either
@@ -372,17 +372,26 @@ file joins onto the full bank layer):
   changes**, each named `<existing field name>_new`, so it maps field-to-field onto the
   hosted layer with no renaming:
 
-  | Field | `FinalWebMap.gdb\Banks` | `ExportsForWebmap_20260312.gdb\BID_Scores` |
-  |---|---|---|
-  | `AspectMEANBID_new` | updates | add |
-  | `aspect_north_factor_new` | add | add |
-  | `combined_solar_new` | add | add |
-  | `solar_risk_new` | add | updates |
-  | `solar_push_new` | add | updates |
-  | `RP_solar_only_new` | add | updates |
-  | `RP_final_new` | add | updates |
-  | `RP_S_final_new` | add | updates |
-  | `CI_new` | add | add |
+  The hosted layer is **`02_DataOut\20260908_ForWebMap_final\FinalWebMap.gdb\BID_Scoring`**
+  (32,145 features, 101 fields) — it carries the full scoring chain. Do not confuse it with
+  `Banks` in the same geodatabase, which has the geometry and `AspectMEANBID` but none of the
+  score fields, or with the March `ExportsForWebmap_20260312.gdb\BID_Scores`, which is an
+  older vintage lacking the aspect columns entirely.
+
+  Against `BID_Scoring`, eight of the nine overwrite a field that already exists and only
+  `CI` is genuinely new:
+
+  | `_new` field in the update table | Target field in `BID_Scoring` |
+  |---|---|
+  | `AspectMEANBID_new` | overwrites `AspectMEANBID` |
+  | `aspect_north_factor_new` | overwrites `aspect_north_factor` |
+  | `combined_solar_new` | overwrites `combined_solar` |
+  | `solar_risk_new` | overwrites `solar_risk` |
+  | `solar_push_new` | overwrites `solar_push` |
+  | `RP_solar_only_new` | overwrites `RP_solar_only` |
+  | `RP_final_new` | overwrites `RP_final` |
+  | `RP_S_final_new` | overwrites `RP_S_final` |
+  | `CI_new` | **new field** — no composite index column exists yet |
 
   Everything else in the scoring table is untouched by this fix and must NOT be rewritten:
   `RP_norm`, the whole area track (`RP_area_*`, `Area_Mult`), `slope_risk` / `slope_push`,
