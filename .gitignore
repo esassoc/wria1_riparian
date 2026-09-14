@@ -14,3 +14,8 @@ __pycache__/
 # deploys the dashboard (CLIENT_DASHBOARD_NOTES.md is the operator how-to and stays).
 docs/
 .superpowers/
+
+# Aspect recompute intermediates and deliverables (large; regenerate with tools/)
+aspect_circular_by_bid_*.csv
+aspect_rescore_join_*.csv
+aspect_circular_run.log

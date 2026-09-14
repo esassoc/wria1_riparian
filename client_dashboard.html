@@ -4058,7 +4058,7 @@
           <ChartCell title={<><Term id="push">Solar push</Term> distribution</>} story="Reaches per 0.5-point bin. Solid line: selection mean · dashed: WRIA mean.">
             <KHistogram sel={d.solHist} wria={w && w.solHist} color={S_MOD.hue} meanSel={d.solMean} meanWria={w && w.solMean} xMin={0} xMax={12} fmt={v => v.toFixed(v % 1 ? 1 : 0)} />
           </ChartCell>
-          <ChartCell title="Share of selected acres by aspect" story="Compass rose. The empty north sector is a property of the source data, shown honestly.">
+          <ChartCell title="Share of selected acres by aspect" story="Compass rose. Bank aspect is a circular mean of the sloped cells in each bank, so opposite banks of a reach can face opposite ways.">
             <KRose rows={rose} color={S_MOD.hue} flat={share(d.asp, 'Flat/Unknown', d.sqft)} />
           </ChartCell>
           <ChartCell title={<>Mean <Term id="rp">Restoration Priority</Term> by solar push band</>} story="Five equal bands of solar push (0–2.4 … 9.6–12).">

@@ -25,9 +25,12 @@ analytical summary tabs.
 |---|---|
 | `client_dashboard.html` | The forked source. **The only file you hand-edit.** |
 | `build_client_site.py` | Build script. Owns the SQLite schema. Run it after any edit. |
-| `BID_Scores_Calculated_20260507.csv` | Build input. S-track score components (`rpsn`/`sols`/`slps`/`rpsf`/`rpsa`), joined onto every BID by `build_client_site.py`. |
+| `BID_Scores_Calculated_20260914_circaspect.csv` | Build input (`SCORES_CSV`). The aspect-corrected rescore of `BID_Scores_Calculated_20260507.csv`; see §11, Fix 3. S-track score components (`rpsn`/`sols`/`slps`/`rpsf`/`rpsa`), joined onto every BID by `build_client_site.py`. |
 | `BID_ZID_LC_20260501.csv` | **Not a build input any more.** Source for `data_cache/lc_derived_20260501.json` only; needed solely for `--refresh-lc-cache`; git-ignored. Zone-level landcover and canopy-height source; also rebuilds `waterbody_bids` (see §11, Fix 2) and feeds the canopy-height clamp (§11, Fix 3). ~433 MB - never copied into `site/`. |
 | `data_overrides/fish_access_override.csv` | Build input. A small, auditable, committed CSV (`bid,fish_gis,fish_scoring`) applied at build time so `tier`/`fish` in the shipped dashboard correct 104 banks against the GIS-authoritative layer (see §11, Fix 1). Regenerate with `tools/make_fish_override.py` whenever the source files are refreshed. |
+| `data_overrides/aspect_override.csv` | Build input. Committed CSV (`BID,asp,af`) supplying the circular-mean bank aspect and north factor, overriding the upstream JSON (see §11, Fix 3). Optional: absent, the build uses upstream values. |
+| `tools/aspect_circular_zonal.py` | Circular zonal statistics of aspect per BID, straight off `aspect1.tif`. Generates the aspect override and the rescore input. |
+| `tools/rescore_aspect.py` | Replays the solar/slope/wetland/CI chain with the corrected north factor. Validates against the stored scores before writing. |
 | `tools/make_fish_override.py` | One-off generator for `fish_access_override.csv` (not part of the build itself). Diffs `TP_Split_JOIN_20260507.csv`'s `Fish_simple` against the current `fish` column in the shipped `site/data/bids.<hash>.sqlite.gz` (unpacked via `tests/db_helpers.py`). |
 | `site/` | Build output. This is what gets pushed to Pages. Never hand-edit. |
 | `tests/test_build_output.py` | Asserts the built site is correct and leaks nothing internal. |
@@ -58,8 +61,8 @@ python tests/run_all.py
 ```
 
 Build inputs consumed automatically by `build_client_site.py` (no separate step needed):
-`BID_Scores_Calculated_20260507.csv`, `data_cache/lc_derived_20260501.json`, and
-`data_overrides/fish_access_override.csv`. `BID_ZID_LC_20260501.csv` is **not** among them —
+`BID_Scores_Calculated_20260914_circaspect.csv`, `data_cache/lc_derived_20260501.json`,
+`data_overrides/fish_access_override.csv`, and `data_overrides/aspect_override.csv`. `BID_ZID_LC_20260501.csv` is **not** among them —
 it is read only under `--refresh-lc-cache`, to regenerate that cache. Only regenerate the fish
 override by hand, and only when `TP_Split_JOIN_20260507.csv` or the scoring CSV is refreshed:
 
@@ -210,12 +213,8 @@ popups. Clicking a BID in the query result list opens the same URL in a new brow
 
 ## 9. Known characteristics (not defects)
 
-- **The aspect chart never shows a north class.** No BID has a mean aspect in the north
-  sector — `AspectMEANBID` spans only 25.9°–327.6°, and south dominates at 14,992 of 30,850.
-  This is what happens when a circular quantity is averaged linearly: per-BID means collapse
-  toward mid-range. It originates upstream in `preprocess_dashboard.py`, outside this build's
-  scope. Worth noting that the same field drives the cos(aspect) solar weighting, so it may
-  deserve a look independently of this dashboard.
+- **~~The aspect chart never shows a north class.~~ FIXED 2026-09-14** — see
+  "Aspect correction" in section 11 below.
 - **193 of 89,319 zones have landcover summing short of their zone area** (0.46% of total
   area). `preprocess_dashboard.py` maps landcover through a fixed 9-class index and drops
   anything outside it, while the denominator still counts it. Upstream and pre-existing;
@@ -308,6 +307,72 @@ impossible for a canopy height. Approved by the project lead: the forest-area-we
 value is clamped to 0 at the point it's computed in `build_client_site.py`. This is a
 **display-layer clamp over a source-data artifact**, not a fix to the source data. 5
 (BID, zone) rows were clamped in the September 2026 build.
+
+### Aspect correction (2026-09-14) — Fix 3
+
+`AspectMEANBID` came from ArcGIS Zonal Statistics MEAN over `aspect1.tif` (1.5 ft, derived
+from `dtm_resample.tif`). It carried **two independent errors**:
+
+1. **Aspect is circular, and it was averaged linearly.** mean(10°, 350°) = 180°, not 0°.
+   Every bank's value collapsed toward south: the field spanned only 25.9°–327.6°, with
+   14,992 of 30,850 banks in the south class and **zero in north**.
+2. **Flat cells (ArcGIS code −1) were averaged as if −1 were a direction.** This pulled
+   flat-dominated banks (mostly lake shores) toward 0°, i.e. a spurious near-maximum *north*
+   boost. 141 banks are >50% flat; their median stored aspect is 8.4°, giving cos ≈ +0.99.
+   Confirmed: `(n_sloped·mean_sloped + n_flat·(−1)) / n_total` reproduces the stored table
+   to 0.0006° median.
+
+Net effect on scoring: `aspect_north_factor = cos(AspectMEANBID)` averaged **−0.774 with
+96.1% of banks penalised**, so the north-facing solar boost was suppressed almost everywhere.
+
+**The fix.** `tools/aspect_circular_zonal.py` recomputes per-bank statistics directly from
+the raster over `Reach_forReview.gdb\FinalReaches\TP_Split` (the BID source), excluding
+flat and NoData cells, and reports the mean of sin and cos per bank. The replacement north
+factor is **the cell-wise mean of cos(aspect)**, not cos(circular mean): it is immune to
+wrap-around and degrades to ~0 (neutral) when a bank's aspects are genuinely scattered,
+which is the honest answer for flat terrain. Runtime ~20 min for 32,145 banks.
+
+`tools/rescore_aspect.py` then replays the downstream chain from `preprocess_dashboard.py`
+(FC2 solar → slope → wetland → CI). It **validates first**: it replays the chain from the
+original unrounded `AspectMEANBID` and aborts unless it reproduces the stored scores. It
+does, exactly, for `aspect_north_factor` / `combined_solar` / `solar_risk`, and to one
+rounding unit for the rest (`RP_norm` is only stored to 2 dp).
+
+Result: north factor **−0.774 → +0.009**, banks penalised **96.1% → 48.9%**, and the
+compass rose fills all eight sectors. `Priority_Tier` is unchanged by design — it is assigned
+from Chinook / Nooksack / temperature / fish-bearing flags with no dependence on RP.
+
+| | mean before | mean after | max up | max down |
+|---|---:|---:|---:|---:|
+| `solar_push` | 2.74 | 2.98 | +9.70 | −8.19 |
+| `RP_final` | 58.19 | 58.40 | +8.74 | −7.38 |
+| `RP_S_final` | 58.82 | 59.04 | +8.75 | −7.39 |
+| `CI` | 31.48 | 31.69 | +8.10 | −6.50 |
+
+**How it reaches the dashboard.** Two inputs, both regenerable:
+- `data_overrides/aspect_override.csv` (committed) supplies `asp`/`af` per BID, overriding
+  the upstream `bid_explorer_data.json`, which cannot be regenerated from here (read-only
+  RF_Test tree). The build aborts if the override is present but misses any BID.
+- `SCORES_CSV` now points at `BID_Scores_Calculated_20260914_circaspect.csv`, the rescored
+  S-track. Reverting both lines restores the previous behaviour exactly.
+
+**To regenerate:**
+```
+python tools/aspect_circular_zonal.py   --banks "..._Project\Reach_forReview.gdb" --layer TP_Split   --raster "..._Project\Rasters\Elevationspect1.tif"   --table  "..._Project\Reach_forReview.gdb" --table-layer AspectByBID   --out aspect_circular_by_bid_YYYYMMDD.csv
+
+python tools/rescore_aspect.py   --scores BID_Scores_Calculated_20260507.csv   --aspect aspect_circular_by_bid_YYYYMMDD.csv   --source-gdb "..._Project\Reach_forReview.gdb" --source-layer TP_Split   --out-scores BID_Scores_Calculated_YYYYMMDD_circaspect.csv   --out-join   aspect_rescore_join_YYYYMMDD.csv
+```
+`--out-join` is the BID-join table for the hosted GIS layer (new and `_old` values side by
+side, plus `RP_final_delta` / `CI_delta`). Requires `geopandas`, `pyogrio`, `rasterio`.
+
+**Caveat worth carrying forward.** Even the circular mean is a weak descriptor here. The
+mean resultant length (1 = all cells face one way, 0 = uniform) has a **median of 0.39**, and
+opposite banks of the same reach come out only ~71° apart rather than 180°. At 1.5 ft on
+bare earth, cell aspect reflects microtopography, not which way the bank faces. For a
+channel-shading question the defensible source is **geometric**: reach bearing from the
+flowline plus which side the bank sits on. `AspectResultantR` is carried in the join CSV so
+low-confidence banks can be identified. This is a known limitation, not a blocker: the
+correction removes two arithmetic errors and is strictly better than what it replaces.
 
 ## 12. Outstanding
 
