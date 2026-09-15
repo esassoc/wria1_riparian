@@ -29,6 +29,7 @@ analytical summary tabs.
 | `BID_ZID_LC_20260501.csv` | **Not a build input any more.** Source for `data_cache/lc_derived_20260501.json` only; needed solely for `--refresh-lc-cache`; git-ignored. Zone-level landcover and canopy-height source; also rebuilds `waterbody_bids` (see §11, Fix 2) and feeds the canopy-height clamp (§11, Fix 3). ~433 MB - never copied into `site/`. |
 | `data_overrides/fish_access_override.csv` | Build input. A small, auditable, committed CSV (`bid,fish_gis,fish_scoring`) applied at build time so `tier`/`fish` in the shipped dashboard correct 104 banks against the GIS-authoritative layer (see §11, Fix 1). Regenerate with `tools/make_fish_override.py` whenever the source files are refreshed. |
 | `data_overrides/aspect_override.csv` | Build input. Committed CSV (`BID,asp,af`) supplying the circular-mean bank aspect and north factor, overriding the upstream JSON (see §11, Fix 3). Optional: absent, the build uses upstream values. |
+| `data_overrides/bid_renames.csv` | Stopgap. Re-keys the AC201 waterbody polygon to `AC201_6` before the aspect recompute, because two polygons on that reach share `SPLIT_SEQ` = 1 and therefore the BID `AC201_1`. Delete once `SPLIT_SEQ` is fixed in the source layer (see §11). |
 | `tools/aspect_circular_zonal.py` | Circular zonal statistics of aspect per BID, straight off `aspect1.tif`. Generates the aspect override and the rescore input. |
 | `tools/rescore_aspect.py` | Replays the solar/slope/wetland/CI chain with the corrected north factor. Validates against the stored scores before writing. |
 | `tools/make_fish_override.py` | One-off generator for `fish_access_override.csv` (not part of the build itself). Diffs `TP_Split_JOIN_20260507.csv`'s `Fish_simple` against the current `fish` column in the shipped `site/data/bids.<hash>.sqlite.gz` (unpacked via `tests/db_helpers.py`). |
@@ -398,6 +399,40 @@ file joins onto the full bank layer):
   `wetland_push`, `RP_S_norm` and `Priority_Tier` are all independent of aspect.
 
 Requires `geopandas`, `pyogrio`, `rasterio`.
+
+### The AC201_1 bank-ID collision
+
+`BID` is always `RID` + `_` + `SPLIT_SEQ` (true for all 32,145 polygons). On reach **AC201**
+two polygons were both given `SPLIT_SEQ` = 1:
+
+| Polygon | `PositionWaterbody` | Area |
+|---|---|---:|
+| riparian bank | Outside of waterbody | 3.6 ac |
+| active channel | Waterbody | 120.3 ac |
+
+They share an edge but do not overlap, so they are two genuinely different features that ended
+up with the same ID. This is the **only** (RID, SPLIT_SEQ) pair in the layer carrying both a
+waterbody and a non-waterbody polygon; AC201 also skips 3, so the numbering on that reach is
+simply wrong. Free numbers on AC201 are 3, 6, 7, 8.
+
+Why it matters: the dashboard flags a BID as in-channel if *any* of its rows is a waterbody, so
+AC201_1 is excluded entirely and the 3.6-acre riparian bank never gets scored. Pooling the two
+polygons' cells also swamps the bank's aspect: separated, the bank reads 8.1 deg (N), resultant
+0.74, north factor **+0.733**, while the channel reads 284.6 deg (W), north factor +0.072 - and
+the pooled value was +0.093, i.e. the channel's.
+
+`data_overrides/bid_renames.csv` re-keys the waterbody polygon to **AC201_6** before the aspect
+recompute, so the two get independent values. It is a stopgap: **delete it once `SPLIT_SEQ` is
+corrected in the source layer.** `tools/aspect_circular_zonal.py` now also *fails* on any
+duplicate BID rather than silently pooling (`--pool-duplicate-bids` restores the old behaviour),
+so this class of error cannot hide again.
+
+What the rename does NOT do on its own: it will not get AC201_1 scored in the dashboard. The
+scoring table and `bid_explorer_data.json` contain only the 30,850 scored BIDs and neither holds
+AC201_1 at all, and `waterbody_bids` is built from `BID_ZID_LC_20260501.csv`, which still keys
+both polygons to AC201_1. Scoring that bank needs the upstream landcover extraction and scoring
+pipeline rerun - out of reach from this tree. The landcover CSV does carry `PositionWaterbody`
+per row (58 waterbody rows, 18 buffer-zone rows for AC201_1), so the data to do it exists.
 
 **Caveat worth carrying forward.** Even the circular mean is a weak descriptor here. The
 mean resultant length (1 = all cells face one way, 0 = uniform) has a **median of 0.39**, and

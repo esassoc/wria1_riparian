@@ -132,6 +132,14 @@ def main():
     ap.add_argument('--out', required=True, help='Output CSV')
     ap.add_argument('--table', default=None, help='Optional .gdb holding the original zonal table for a check')
     ap.add_argument('--table-layer', default='AspectByBID')
+    ap.add_argument('--bid-override', default=None,
+                    help='CSV of RID,SPLIT_SEQ,PositionWaterbody,new_BID used to re-key specific '
+                         'polygons before processing. Exists because SPLIT_SEQ (and therefore BID) '
+                         'collided on one reach; delete it once the source layer is fixed.')
+    ap.add_argument('--pool-duplicate-bids', action='store_true',
+                    help='Pool the cells of polygons that share a BID instead of failing. ArcGIS '
+                         'Zonal Statistics does this implicitly, but it silently averages unrelated '
+                         'polygons together, so it is opt-in here.')
     ap.add_argument('--limit', type=int, default=None, help='Process only the first N banks (testing)')
     ap.add_argument('--workers', type=int, default=max(2, (os.cpu_count() or 2)))
     a = ap.parse_args()
@@ -146,8 +154,36 @@ def main():
         print(f'raster: {src.width} x {src.height} cells, {src.res[0]:g} unit cells, nodata={src.nodata}, crs={ras_crs.to_string()[:60]}')
 
     print(f'reading banks from {a.banks} layer={a.layer} ...')
-    gdf = gpd.read_file(a.banks, layer=a.layer, engine='pyogrio', columns=[a.bid_field])
+    cols = [a.bid_field]
+    if a.bid_override:
+        cols += ['RID', 'SPLIT_SEQ', 'PositionWaterbody']
+    gdf = gpd.read_file(a.banks, layer=a.layer, engine='pyogrio', columns=cols)
     print(f'  {len(gdf):,} polygons, crs={gdf.crs.to_string()[:60]}')
+
+    if a.bid_override:
+        ov = pd.read_csv(a.bid_override, dtype={'RID': str, 'PositionWaterbody': str, 'new_BID': str})
+        applied = 0
+        for _, o in ov.iterrows():
+            hit = ((gdf['RID'] == o['RID']) & (gdf['SPLIT_SEQ'] == int(o['SPLIT_SEQ']))
+                   & (gdf['PositionWaterbody'] == o['PositionWaterbody']))
+            n = int(hit.sum())
+            if n != 1:
+                sys.exit(f'ABORT: bid override row {dict(o)} matched {n} polygons, expected exactly 1')
+            old = gdf.loc[hit, a.bid_field].iloc[0]
+            if o['new_BID'] in set(gdf[a.bid_field]):
+                sys.exit(f'ABORT: bid override would create a duplicate: {o["new_BID"]} already exists')
+            gdf.loc[hit, a.bid_field] = o['new_BID']
+            print(f'  bid override: {o["RID"]} seq {o["SPLIT_SEQ"]} '
+                  f'({o["PositionWaterbody"]}) re-keyed {old} -> {o["new_BID"]}')
+            applied += 1
+        print(f'  applied {applied} bid override(s)')
+
+    dup = gdf[a.bid_field][gdf[a.bid_field].duplicated(keep=False)]
+    if len(dup) and not a.pool_duplicate_bids:
+        sys.exit(f'ABORT: {dup.nunique()} BID(s) appear on more than one polygon: '
+                 f'{sorted(set(dup))[:10]}. Fix the source layer (or supply --bid-override), '
+                 'or pass --pool-duplicate-bids to average their cells together as ArcGIS '
+                 'Zonal Statistics would.')
     if gdf.crs != ras_crs:
         print('  reprojecting polygons to raster CRS')
         gdf = gdf.to_crs(ras_crs)
