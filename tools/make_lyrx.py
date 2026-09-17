@@ -81,8 +81,36 @@ def palette():
     lc = re.findall(r"\{\s*key:\s*'([^']+)',\s*color:\s*'(#[0-9A-Fa-f]{6})'"
                     r"(?:,\s*texture:\s*'([^']*)')?\s*\}", _block(src, "LC9"))
     ramp = [lerp_hex(theme["accentTint"], theme["ink"], m / 100.0) for m in MIDS]
-    return {"lc": [(k, c) for k, c, _ in lc], "ramp": ramp,
+    poles = flat_map(src, "COMP_POLES")
+    nf = re.search(r"NOFOREST_FILL\s*=\s*'(#[0-9A-Fa-f]{6})'\s*,\s*"
+                   r"NOFOREST_STROKE\s*=\s*'(#[0-9A-Fa-f]{6})'", src)
+    return {"lc": [(k, c) for k, c, _ in lc], "ramp": ramp, "poles": poles,
+            "nofor": nf.group(1), "nofor_stroke": nf.group(2),
             "faint": theme["faint"], "line2": theme["line2"]}
+
+
+def comp_color(v, poles):
+    """Port of the page's compColor. Diverging, with |v| < 0.1 reported as Mixed:
+    the ramp only reaches 20% saturation across that central band, so mixed forest
+    still reads as forest rather than as a weak conifer or deciduous tint."""
+    a = min(1.0, abs(v))
+    if a == 0:
+        return poles["mid"]
+    t = a * 2 if a < 0.1 else 0.2 + 0.8 * (a - 0.1) / 0.9
+    return lerp_hex(poles["mid"], poles["conifer"] if v > 0 else poles["deciduous"], t)
+
+
+# Composition classes. Breaks are symmetric about the Mixed band the dashboard defines
+# (|value| < 0.1); each class is coloured at its own midpoint through comp_color.
+COMP_BREAKS = [
+    (-0.6, "-1.00 to -0.60  strongly deciduous", -0.80),
+    (-0.3, "-0.60 to -0.30  deciduous", -0.45),
+    (-0.1, "-0.30 to -0.10  slightly deciduous", -0.20),
+    (0.1, "-0.10 to 0.10  mixed", 0.00),
+    (0.3, " 0.10 to 0.30  slightly conifer", 0.20),
+    (0.6, " 0.30 to 0.60  conifer", 0.45),
+    (1.0, " 0.60 to 1.00  strongly conifer", 0.80),
+]
 
 
 def class_breaks_renderer(field, ramp, label_fmt="{lo:g} - {hi:g}"):
@@ -121,6 +149,45 @@ def class_breaks_renderer(field, ramp, label_fmt="{lo:g} - {hi:g}"):
     }
 
 
+def composition_renderer(field, poles, nofor_hex, nofor_stroke, show_default=True):
+    """Diverging graduated renderer for forest composition, -1 deciduous to +1 conifer.
+
+    show_default=False when a definition query already excludes the null rows: keeping
+    the default symbol would put a legend entry there that can never draw."""
+    breaks = []
+    for upper, label, mid in COMP_BREAKS:
+        breaks.append({
+            "type": "CIMClassBreak",
+            "label": label,
+            "patch": "Default",
+            "symbol": poly_symbol(comp_color(mid, poles)),
+            "upperBound": upper,
+        })
+    return {
+        "type": "CIMClassBreaksRenderer",
+        "barrierWeight": "High",
+        "breaks": breaks,
+        "classBreakType": "GraduatedColor",
+        "classificationMethod": "Manual",
+        "colorRamp": None,
+        "field": field,
+        "minimumBreak": -1.0,
+        "numberFormat": {"type": "CIMNumericFormat", "alignmentOption": "esriAlignLeft",
+                         "alignmentWidth": 0, "roundingOption": "esriRoundNumberOfDecimals",
+                         "roundingValue": 2, "useSeparator": True},
+        "showInAscendingOrder": True,
+        "heading": "Composition",
+        "sampleSize": 10000,
+        "defaultSymbolPatch": "Default",
+        "defaultSymbol": poly_symbol(nofor_hex, nofor_stroke, 0),
+        # Composition is forest-only: 58% of landcover polygons have no value at all.
+        "defaultLabel": "No forest composition (non-forest)",
+        "polygonSymbolColorTarget": "Fill",
+        "useDefaultSymbol": show_default,
+        "normalizationType": "Nothing",
+    }
+
+
 def unique_value_renderer(field, heading, pairs, default_hex, default_label):
     return {
         "type": "CIMUniqueValueRenderer",
@@ -146,14 +213,12 @@ def unique_value_renderer(field, heading, pairs, default_hex, default_label):
     }
 
 
-def build(out_path, fc, layer_name, renderer, template, arcpy):
-    """Make a .lyrx for `fc`, then graft on the template's conventions + our renderer."""
-    # SaveToLayerFile insists on a .lyrx extension, so the scratch file keeps one.
-    tmp = os.path.join(os.path.dirname(out_path),
-                       "_tmp_" + os.path.basename(out_path))
+def layer_def(fc, layer_name, renderer, template, arcpy, where=None):
+    """Build one CIMFeatureLayer definition for `fc`, styled and optionally filtered."""
+    tmp = os.path.join(OUT_DIR, "_tmp_layer.lyrx")   # SaveToLayerFile wants a .lyrx name
     if arcpy.Exists("mk_lyr"):
         arcpy.management.Delete("mk_lyr")
-    arcpy.management.MakeFeatureLayer(fc, "mk_lyr")
+    arcpy.management.MakeFeatureLayer(fc, "mk_lyr", where or "")
     arcpy.management.SaveToLayerFile("mk_lyr", tmp, "ABSOLUTE")
     doc = json.load(open(tmp, encoding="utf-8-sig"))
     os.remove(tmp)
@@ -177,18 +242,49 @@ def build(out_path, fc, layer_name, renderer, template, arcpy):
             ld[k] = tld[k]
 
     ld["name"] = layer_name
-    ld["uRI"] = "CIMPATH=Map3/%s.json" % layer_name.replace(" ", "_")
+    ld["uRI"] = "CIMPATH=Map3/%s.json" % re.sub(r"[^A-Za-z0-9_]", "_", layer_name)
     ld["renderer"] = renderer
-    doc["layers"] = [ld["uRI"]]
-    doc["version"] = template.get("version", doc.get("version"))
-    doc["build"] = template.get("build", doc.get("build"))
+    return ld
+
+
+def wrap(doc_layers, template, out_path):
+    """Write a .lyrx document around one or more layer definitions."""
+    doc = {"type": "CIMLayerDocument",
+           "version": template.get("version", "3.7.0"),
+           "build": template.get("build", 1904),
+           "layers": [doc_layers[0]["uRI"]],
+           "layerDefinitions": doc_layers}
     for k in ("rGBColorProfile", "cMYKColorProfile"):
         if k in template:
             doc[k] = template[k]
-
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=1)
     return out_path
+
+
+def group_layer(name, children, template):
+    """A CIMGroupLayer holding `children` (already-built layer definitions).
+
+    This is what makes the two-layer TOC arrangement shippable as ONE file: the
+    landcover draw and the composition draw arrive together, each with its own
+    definition query, instead of having to be added and filtered by hand.
+    """
+    tld = template["layerDefinitions"][0]
+    g = {
+        "type": "CIMGroupLayer",
+        "name": name,
+        "uRI": "CIMPATH=Map3/%s.json" % re.sub(r"[^A-Za-z0-9_]", "_", name),
+        "layerType": "Operational",
+        "showLegends": True,
+        "visibility": True,
+        "displayCacheType": "Permanent",
+        "maxDisplayCacheAge": 5,
+        "layers": [c["uRI"] for c in children],
+    }
+    for k in ("blendingMode", "allowDrapingOnIntegratedMesh"):
+        if k in tld:
+            g[k] = tld[k]
+    return g
 
 
 def main():
@@ -219,45 +315,74 @@ def main():
     lc_pairs = [(k, c) for k, c in pal["lc"] if k in present]
     skipped = [k for k, _ in pal["lc"] if k not in present]
 
+    # Composition lives on the Landcover layer but only on forest polygons that have a
+    # value. The two draws are therefore complementary, and each carries the definition
+    # query that keeps them from overlapping -- the same arrangement as doing it by hand
+    # in the table of contents.
+    HAS_COMP = "Composition IS NOT NULL"
+    NO_COMP = "Composition IS NULL"
+
     jobs = [
         ("RP_S_Final.lyrx", scoring, "Restoration Priority (S-curve, final)",
-         class_breaks_renderer("RP_S_final", pal["ramp"])),
+         class_breaks_renderer("RP_S_final", pal["ramp"]), None),
         ("Composite_Index.lyrx", scoring, "Composite Index",
-         class_breaks_renderer("CI_new", pal["ramp"])),
+         class_breaks_renderer("CI_new", pal["ramp"]), None),
         ("Area_S_Percentile.lyrx", scoring, "Area Percentile (S-curve)",
-         class_breaks_renderer("RP_S_area_pctile", pal["ramp"])),
+         class_breaks_renderer("RP_S_area_pctile", pal["ramp"]), None),
         ("Landcover.lyrx", landcover, "Landcover",
          unique_value_renderer("Landcover", "Landcover", lc_pairs,
-                               pal["faint"], "<all other values>")),
+                               pal["faint"], "<all other values>"), None),
+        ("Landcover_no_composition.lyrx", landcover, "Landcover (no composition value)",
+         unique_value_renderer("Landcover", "Landcover", lc_pairs,
+                               pal["faint"], "<all other values>"), NO_COMP),
+        ("Composition.lyrx", landcover, "Forest Composition",
+         composition_renderer("Composition", pal["poles"],
+                              pal["nofor"], pal["nofor_stroke"],
+                              show_default=False), HAS_COMP),
     ]
 
     os.makedirs(a.out_dir, exist_ok=True)
-    for fname, fc, name, rend in jobs:
-        p = build(os.path.join(a.out_dir, fname), fc, name, rend, template, arcpy)
-        print("  wrote %-24s %7d bytes  <- %s" % (fname, os.path.getsize(p),
-                                                  os.path.basename(fc)))
+    built = {}
+    for fname, fc, name, rend, where in jobs:
+        ld = layer_def(fc, name, rend, template, arcpy, where)
+        p = wrap([ld], template, os.path.join(a.out_dir, fname))
+        built[fname] = ld
+        print("  wrote %-32s %7d bytes  <- %-12s %s"
+              % (fname, os.path.getsize(p), os.path.basename(fc), where or ""))
+
+    # One drop-in file holding both draws, in the order they belong in the TOC.
+    kids = [copy.deepcopy(built["Composition.lyrx"]),
+            copy.deepcopy(built["Landcover_no_composition.lyrx"])]
+    grp = group_layer("Landcover + Forest Composition", kids, template)
+    gpath = wrap([grp] + kids, template,
+                 os.path.join(a.out_dir, "Landcover_with_Composition.lyrx"))
+    print("  wrote %-32s %7d bytes  <- group of %d"
+          % (os.path.basename(gpath), os.path.getsize(gpath), len(kids)))
+
     if skipped:
         print("  landcover classes in the palette with no features here: %s" % ", ".join(skipped))
 
     # Read every file back the way ArcGIS would, and report what it sees.
     print("\nverifying:")
-    for fname, _, _, _ in jobs:
-        p = os.path.join(a.out_dir, fname)
-        lf = arcpy.mp.LayerFile(p)
+    names = [j[0] for j in jobs] + ["Landcover_with_Composition.lyrx"]
+    for fname in names:
+        lf = arcpy.mp.LayerFile(os.path.join(a.out_dir, fname))
+        print("  " + fname)
         for l in lf.listLayers():
+            if l.isGroupLayer:
+                print("      GROUP %-34s %d sublayer(s)" % (l.name, len(l.listLayers())))
+                continue
             cim = l.getDefinition("V3")
             r = cim.renderer
             kind = type(r).__name__
             if kind == "CIMClassBreaksRenderer":
-                cols = [[int(x) for x in b.symbol.symbol.symbolLayers[-1].color.values[:3]]
-                        for b in r.breaks]
-                print("  %-24s %-26s field=%-18s %d classes %s"
-                      % (fname, kind, r.field, len(r.breaks), cols))
+                detail = "field=%-18s %d classes" % (r.field, len(r.breaks))
             else:
-                n = sum(len(g.classes) for g in r.groups)
-                print("  %-24s %-26s field=%-18s %d classes"
-                      % (fname, kind, list(r.fields)[0], n))
-            print("      source: %s | broken: %s" % (l.dataSource, l.isBroken))
+                detail = "field=%-18s %d classes" % (list(r.fields)[0],
+                                                     sum(len(g.classes) for g in r.groups))
+            dq = l.definitionQuery or ""
+            print("      %-34s %-22s %s" % (l.name[:34], detail, ("query: " + dq) if dq else ""))
+            print("          broken: %s" % l.isBroken)
 
 
 if __name__ == "__main__":
