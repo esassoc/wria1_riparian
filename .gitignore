@@ -21,3 +21,4 @@ aspect_rescore_join_*.csv
 aspect_circular_run.log
 aspect_gis_update_*.csv
 Field_Definitions*.xlsx
+tier_update_*.csv

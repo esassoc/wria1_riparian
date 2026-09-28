@@ -32,6 +32,7 @@ analytical summary tabs.
 | `data_overrides/bid_renames.csv` | Stopgap. Re-keys the AC201 waterbody polygon to `AC201_6` before the aspect recompute, because two polygons on that reach share `SPLIT_SEQ` = 1 and therefore the BID `AC201_1`. Delete once `SPLIT_SEQ` is fixed in the source layer (see §11). |
 | `tools/aspect_circular_zonal.py` | Circular zonal statistics of aspect per BID, straight off `aspect1.tif`. Generates the aspect override and the rescore input. |
 | `tools/rescore_aspect.py` | Replays the solar/slope/wetland/CI chain with the corrected north factor. Validates against the stored scores before writing. |
+| `tools/arcade/bid_popup.arcade` | Arcade content element for the BID_Scoring pop-up in the ArcGIS Online webmap: tier badge, location line, one data-driven paragraph, and a link to the bank's dashboard page. Recomputes the priority tier from the layer's own attributes with the dashboard rule, so it matches the dashboard on every bank and can say why. Tested in Esri's Arcade engine and popup widget (SDK 4.32). Set the pop-up title to `Bank {BID}`. |
 | `tools/make_fish_override.py` | One-off generator for `fish_access_override.csv` (not part of the build itself). Diffs `TP_Split_JOIN_20260507.csv`'s `Fish_simple` against the current `fish` column in the shipped `site/data/bids.<hash>.sqlite.gz` (unpacked via `tests/db_helpers.py`). |
 | `site/` | Build output. This is what gets pushed to Pages. Never hand-edit. |
 | `tests/test_build_output.py` | Asserts the built site is correct and leaks nothing internal. |

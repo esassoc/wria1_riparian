@@ -1,0 +1,174 @@
+// ============================================================================
+// WRIA 1 Riparian - bank summary for the BID_Scoring pop-up
+//
+// Where it goes:  Map Viewer > BID_Scoring > Pop-ups > + Add content > Arcade
+// Returns a tier badge, a one-line location, one short data-driven paragraph,
+// and a link to the bank's page in the dashboard.
+//
+// Why the tier is recomputed here instead of read from Priority_Tier: the
+// stored field predates the fish-access correction and disagrees with the
+// dashboard on 95 banks. Recomputing it from the layer's own attributes, with
+// the dashboard's rule, matches the dashboard on all 30,850 scored banks, and
+// lets the text say exactly WHY a bank landed in its tier.
+//
+// Every field is read through fld(), which returns null instead of erroring if
+// a field is missing or renamed, so the text degrades rather than breaking.
+// ============================================================================
+
+var f = $feature;
+
+// ---- settings ---------------------------------------------------------------
+var DASHBOARD = 'https://esassoc.github.io/wria1_riparian/#bid/';
+
+// Composite Index percentiles across the 30,850 scored banks (September 2026
+// run). Refresh these four numbers if the scores are ever rerun.
+var CI_P95 = 80.7;
+var CI_P90 = 70.4;
+var CI_P75 = 47.1;
+var CI_P50 = 25.9;
+
+// ---- helpers ----------------------------------------------------------------
+function fld(feat, name) {
+  if (HasKey(feat, name)) { return feat[name]; }
+  return null;
+}
+function txt(feat, name) {
+  var v = fld(feat, name);
+  if (IsEmpty(v)) { return ''; }
+  return Trim(Text(v));
+}
+function ordinal(n) {
+  var v = Round(n, 0);
+  var t = v % 100;
+  var suf = When(t >= 11 && t <= 13, 'th', v % 10 == 1, 'st', v % 10 == 2, 'nd',
+                 v % 10 == 3, 'rd', 'th');
+  return Text(v) + suf;
+}
+
+// ---- read the feature --------------------------------------------------------
+var bid  = txt(f, 'BID');
+var rp   = fld(f, 'RP_S_final');
+var ap   = fld(f, 'RP_S_area_pctile');
+var ci   = fld(f, 'CI_new');
+var srz  = txt(f, 'SR_Zone');
+var sp   = txt(f, 'salmon_species');
+var name = txt(f, 'GNIS_NAME');
+var size = txt(f, 'BFW_class');
+var fish = txt(f, 'Fish_simple') == 'fish';
+var temp = txt(f, 'temp_impaired') == 'True';     // stored as text 'True'/'False'
+var hmz  = txt(f, 'is_hmz') == 'True';
+var wb   = txt(f, 'PositionWaterbody') == 'Waterbody';
+
+// ---- location line -----------------------------------------------------------
+var zone = Decode(srz,
+  'Lower NF Nooksack', 'Lower North Fork Nooksack',
+  'Upper NF Nooksack', 'Upper North Fork Nooksack',
+  'Lower MF Nooksack', 'Lower Middle Fork Nooksack',
+  'Upper MF Nooksack', 'Upper Middle Fork Nooksack',
+  'Lower SF Nooksack', 'Lower South Fork Nooksack',
+  'Upper SF Nooksack', 'Upper South Fork Nooksack',
+  srz);
+var place = [];
+if (name == '') { Push(place, 'Unnamed reach'); } else { Push(place, name); }
+if (size != '') { Push(place, size); }
+if (zone != '') { Push(place, zone); }
+var subtitle = Concatenate(place, ' · ');
+// The pop-up title carries the bank ID (set it to: Bank {BID}), so the content
+// opens with the tier badge and the location instead of repeating the ID.
+function locationLine(badge, where) {
+  return '<div style="color:#7E8F96;font-size:12px;margin-bottom:6px">' + badge + where + '</div>';
+}
+
+// ---- unscored polygons: say why, and stop ------------------------------------
+if (IsEmpty(rp)) {
+  var why = 'No scored riparian landcover falls in this bank\'s buffer zones, so it has no score.';
+  if (wb) {
+    // Waterbody polygons are both river channels and lakes, so say "open water".
+    why = 'This polygon is open water, not riparian bank, so it is not scored. The surrounding banks carry the scores.';
+  }
+  return { type: 'text',
+           text: locationLine('', subtitle) + '<p style="margin:0">' + why + '</p>' };
+}
+
+// ---- salmon list ------------------------------------------------------------
+var parts = [];
+if (sp != '') { parts = Split(sp, ';'); }
+var spp = [];
+for (var i = 0; i < Count(parts); i++) { Push(spp, Trim(parts[i])); }
+var n = Count(spp);
+
+// ---- priority tier: the dashboard's rule, first match wins -------------------
+var chin = Find('Spring Chinook', sp) > -1;
+var nook = Find('Nooksack', srz) > -1;
+var tier = 'P5';
+var reason = 'has no documented fish use, so access rather than riparian condition sets its tier';
+if (n > 0) {
+  reason = 'is not mapped as fish-accessible, so access rather than riparian condition sets its tier';
+}
+if (chin && nook && temp) {
+  tier = 'P1'; reason = 'is Spring Chinook water in the Nooksack and is 303(d) temperature listed';
+} else if (chin && nook) {
+  tier = 'P2'; reason = 'is Spring Chinook water in the Nooksack, though not temperature listed';
+} else if (fish && !chin && temp) {
+  tier = 'P2'; reason = 'is fish-bearing water with a 303(d) temperature listing';
+} else if (fish && nook && !chin) {
+  tier = 'P3'; reason = 'is fish-bearing in the Nooksack, without Spring Chinook or a temperature listing';
+} else if (fish && !nook && temp) {
+  tier = 'P3'; reason = 'is Spring Chinook water outside the Nooksack with a temperature listing';
+} else if (fish && !nook) {
+  tier = 'P4'; reason = 'is fish-bearing outside the Nooksack, with no temperature listing';
+}
+
+// Canonical tier colours from the dashboard; P3 and P5 need dark text.
+var bg = Decode(tier, 'P1', '#8E2440', 'P2', '#D2623A', 'P3', '#DDAA3E', 'P4', '#2F6FA8', '#8E9AA1');
+var fg = IIf(tier == 'P3' || tier == 'P5', '#163A4A', '#FFFFFF');
+
+// ---- scores -----------------------------------------------------------------
+// Word bands use the same 20-point classes as the map legend.
+var rpWord = When(rp >= 80, 'very high', rp >= 60, 'high', rp >= 40, 'moderate',
+                  rp >= 20, 'low', 'very low');
+var ciRank = When(ci >= CI_P95, 'in the top 5% of WRIA 1 banks',
+                  ci >= CI_P90, 'in the top 10% of WRIA 1 banks',
+                  ci >= CI_P75, 'in the top quarter of WRIA 1 banks',
+                  ci >= CI_P50, 'above the WRIA 1 median',
+                  'below the WRIA 1 median');
+
+var s1 = 'Restoration Priority is <b>' + Text(Round(rp, 0)) + '</b> (' + rpWord +
+         ') and the bank is in the <b>' + ordinal(ap) + '</b> percentile by area, for a ' +
+         'Composite Index of <b>' + Text(Round(ci, 0)) + '</b>, ' + ciRank + '.';
+
+var s2 = 'Tier <b>' + tier + '</b> because it ' + reason + '.';
+
+var s3 = '';
+var lead = 'Salmon present: ';
+if (tier == 'P5' && n > 0) { lead = 'Salmon distribution data still lists '; }
+if (n == 1) {
+  s3 = lead + spp[0] + '.';
+} else if (n == 2) {
+  s3 = lead + spp[0] + ' and ' + spp[1] + '.';
+} else if (n == 3) {
+  s3 = lead + spp[0] + ', ' + spp[1] + ' and ' + spp[2] + '.';
+} else if (n > 3) {
+  s3 = lead + spp[0] + ', ' + spp[1] + ' and ' + Text(n - 2) + ' other species.';
+} else if (fish) {
+  s3 = 'Fish-bearing, with no salmon species documented.';
+}
+
+var extra = [];
+if (hmz) { Push(extra, 'Within the Historic Migration Zone.'); }
+if (tier == 'P5' && temp) { Push(extra, 'The reach is 303(d) temperature listed.'); }
+
+var body = s1 + ' ' + s2;
+if (s3 != '') { body = body + ' ' + s3; }
+if (Count(extra) > 0) { body = body + ' ' + Concatenate(extra, ' '); }
+
+// ---- assemble ---------------------------------------------------------------
+var badge = '<span style="background-color:' + bg + ';color:' + fg +
+            ';font-weight:bold;padding:1px 6px;border-radius:3px;margin-right:6px">' +
+            tier + '</span>';
+var html =
+  locationLine(badge, subtitle) +
+  '<p style="margin:0 0 6px 0">' + body + '</p>' +
+  '<a href="' + DASHBOARD + bid + '" target="_blank">Open this bank in the dashboard</a>';
+
+return { type: 'text', text: html };
