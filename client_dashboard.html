@@ -90,6 +90,9 @@
     .legend i.hollow{background:none;border:1.5px solid var(--ghost)}
     .legend i.dash{width:14px;height:0;border-top:2px dashed var(--ghost);border-radius:0}
     .legend i.solid{width:14px;height:0;border-top:2px solid var(--ink);border-radius:0}
+    .legend.lg{gap:8px 18px;font-size:13px}                 /* Bank Explorer grid legend: larger */
+    .legend.lg span{gap:7px}
+    .legend.lg i{width:14px;height:14px;border-radius:3px}
     .note{font-size:12px;color:var(--ink-2);background:var(--accent-tint);border:1px solid var(--accent-tint-2);border-radius:5px;padding:8px 12px}
     .seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
     .seg button{appearance:none;border:0;background:var(--surface);font:500 12px var(--font-b);color:var(--ink-2);padding:4px 10px;cursor:pointer}
@@ -103,7 +106,7 @@
     .tip b{color:var(--ink);font-weight:600}
     .tip .num{color:var(--ink)}
     /* landcover textures */
-    .tx-rail{background-color:var(--lc-rail)!important;background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.38) 0 1px,transparent 1px 4px),repeating-linear-gradient(90deg,rgba(255,255,255,.38) 0 1px,transparent 1px 4px)}
+    .tx-rail{background-color:var(--lc-rail)!important}   /* plain purple; the white hatching was dropped 2026-09-28 */
     .tx-cimp{background-color:var(--lc-cimp)!important;background-image:radial-gradient(rgba(38,73,20,.75) .9px,transparent 1.1px);background-size:4px 4px;background-position:1px 1px}
     /* section (Summary Stats) */
     .sec{margin-top:14px;border-left:4px solid var(--c);overflow:hidden}
@@ -516,8 +519,8 @@
         style={{ '--c': TIER_COLORS[tier] || THEME.faint }} title={TIER_LABELS[tier] || tier}>{tier}</span></Term>
     );
     // items: [{label, color}] | [{label, hollow:true}] | [{label, dash:true}] | [{label, solid:true}] | [{label, texture}]
-    const LegendRow = ({ items, style }) => (
-      <span className="legend" style={style}>
+    const LegendRow = ({ items, style, className }) => (
+      <span className={className ? `legend ${className}` : 'legend'} style={style}>
         {items.map(it => (
           <span key={it.label}>
             <i className={it.hollow ? 'hollow' : it.dash ? 'dash' : it.solid ? 'solid' : (it.texture || '')}
@@ -1444,6 +1447,11 @@
     const BE_ZONE_WEIGHTS = [10, 6, 3, 2, 1]; // must match preprocessor ZONE_WEIGHTS
     const BE_LC_LABELS = LC_LABELS_9;
     const BE_CH_COLS = 4; // column count for channel/lake grid
+    // Bank Explorer grid width = BE_GRID_COLS cells + BE_GRID_OVERHEAD px: the 1px gaps
+    // inside the six grids (48), their 1px padding (12), the 3px flex gaps (18), the
+    // divider (1), and a few px of slack.
+    const BE_GRID_COLS = BE_CH_COLS + GRID_TOTAL_COLS;
+    const BE_GRID_OVERHEAD = 84;
 
     function buildBankZoneGrid(zd, cols, zi) {
       // Build deterministic grid cells for one zone section
@@ -1661,6 +1669,22 @@
       // taking a slot in the grid row (the slot widened the row and toggled the
       // scrollbar on every hover, which shook the grid).
       const showBeHover = (e, info) => setBeHover(info ? { ...info, x: e.clientX, y: e.clientY } : null);
+      // Grid cell size in px, fitted to the card: the largest cell (10-16) at which the
+      // channel column plus all five zones fit the width without scrolling. Below 10px
+      // the grid keeps 10px cells and scrolls inside itself, as before. A callback ref,
+      // because the grid only mounts once a bank is selected.
+      const [beCell, setBeCell] = React.useState(10);
+      const beRoRef = React.useRef(null);
+      const beGridRef = React.useCallback(node => {
+        if (beRoRef.current) { beRoRef.current.disconnect(); beRoRef.current = null; }
+        if (!node) return;
+        const fit = () => setBeCell(Math.max(10, Math.min(16,
+          Math.floor((node.clientWidth - BE_GRID_OVERHEAD) / BE_GRID_COLS))));
+        fit();
+        const ro = new ResizeObserver(fit);
+        ro.observe(node);
+        beRoRef.current = ro;
+      }, []);
       const searchRef = React.useRef(null);
 
       // Close dropdown on outside click
@@ -1765,20 +1789,21 @@
                     <span style={{ fontSize: 11.5, color: THEME.muted }}>← Channel · Upland →</span>
                   </div>
                   <div className="card-b">
-                    {/* The zone grid is built from fixed 10px cells across ~54 columns, so its
-                        intrinsic width (~772px) cannot shrink. Without its own scroll container it
-                        forced the whole PAGE to scroll horizontally at tablet width - 822px against a
-                        768px viewport - which matters because AGOL popups deep-link straight into this
-                        populated view. Wide content scrolls inside itself; the body never does. */}
-                    <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                    {/* The zone grid is built from fixed-size cells across ~54 columns (beCell px,
+                        fitted to this card, never below 10px), so at its smallest it is ~620px and
+                        cannot shrink further. Without its own scroll container it forced the whole
+                        PAGE to scroll horizontally at tablet width, which matters because AGOL popups
+                        deep-link straight into this populated view. Wide content scrolls inside
+                        itself; the body never does. */}
+                    <div ref={beGridRef} style={{ overflowX: 'auto', maxWidth: '100%' }}>
                     <div style={{ display: 'flex', gap: 3, justifyContent: 'center', alignItems: 'flex-start', width: 'max-content', minWidth: '100%' }}>
                       {/* Channel/Lake column (left of 0-50ft) */}
                       {chCells ? (
                         <div>
                           <div style={{
                             display: 'grid',
-                            gridTemplateColumns: `repeat(${BE_CH_COLS}, 10px)`,
-                            gridTemplateRows: `repeat(${GRID_ROWS}, 10px)`,
+                            gridTemplateColumns: `repeat(${BE_CH_COLS}, ${beCell}px)`,
+                            gridTemplateRows: `repeat(${GRID_ROWS}, ${beCell}px)`,
                             gap: 1,
                             background: THEME.line,
                             padding: 1,
@@ -1793,7 +1818,7 @@
                                 } : null)}
                                 onMouseLeave={() => setBeHover(null)}
                                 style={{
-                                  width: 10, height: 10, borderRadius: 1,
+                                  width: beCell, height: beCell, borderRadius: 1,
                                   backgroundColor: cell.lc < 0 ? THEME.line2
                                     : cell.lc === 0 ? compToColor(cell.comp)
                                     : LAB_LC_FILLS[cell.lc],
@@ -1801,13 +1826,13 @@
                                 }} />
                             ))}
                           </div>
-                          <div className="text-center mt-1" style={{ fontSize: 9, color: THEME.accentInk }}>
+                          <div className="text-center mt-1" style={{ fontSize: 11, color: THEME.accentInk }}>
                             {chLabel}
                           </div>
                         </div>
                       ) : waterType === '' && attr ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: GRID_ROWS * 11 + 2, minWidth: 30 }}>
-                          <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 9, color: THEME.accentInk, letterSpacing: 1 }}>Stream</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: GRID_ROWS * (beCell + 1) + 1, minWidth: 30 }}>
+                          <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 11, color: THEME.accentInk, letterSpacing: 1 }}>Stream</div>
                         </div>
                       ) : null}
 
@@ -1828,8 +1853,8 @@
                           <div key={zi} style={{ opacity: zd ? 1 : 0.3 }}>
                             <div style={{
                               display: 'grid',
-                              gridTemplateColumns: `repeat(${cols}, 10px)`,
-                              gridTemplateRows: `repeat(${GRID_ROWS}, 10px)`,
+                              gridTemplateColumns: `repeat(${cols}, ${beCell}px)`,
+                              gridTemplateRows: `repeat(${GRID_ROWS}, ${beCell}px)`,
                               gap: 1,
                               background: THEME.line,
                               padding: 1,
@@ -1844,7 +1869,7 @@
                                   } : null)}
                                   onMouseLeave={() => setBeHover(null)}
                                   style={{
-                                    width: 10, height: 10, borderRadius: 1,
+                                    width: beCell, height: beCell, borderRadius: 1,
                                     backgroundColor: cell.lc < 0 ? THEME.line2
                                       : cell.lc === 0 ? compToColor(cell.comp)
                                       : LAB_LC_FILLS[cell.lc],
@@ -1852,7 +1877,7 @@
                                   }} />
                               ))}
                             </div>
-                            <div className="text-center mt-1" style={{ fontSize: 9, color: THEME.muted }}>
+                            <div className="text-center mt-1" style={{ fontSize: 11, color: THEME.muted }}>
                               {BE_ZONE_LABELS[zi]}
                             </div>
                           </div>
@@ -1899,14 +1924,14 @@
                     </div>
                     </div>
                     {/* LC Legend - matches Score Lab */}
-                    <div style={{ display: 'flex', gap: 22, alignItems: 'center', marginTop: 14, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 22, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 220, flex: 1 }}>
-                        <div style={{ height: 10, borderRadius: 3, border: `1px solid ${THEME.line}`, background: `linear-gradient(90deg, ${COMP_POLES.conifer}, ${COMP_POLES.mid} 50%, ${COMP_POLES.deciduous})` }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: THEME.muted, marginTop: 3 }}>
+                        <div style={{ height: 14, borderRadius: 3, border: `1px solid ${THEME.line}`, background: `linear-gradient(90deg, ${COMP_POLES.conifer}, ${COMP_POLES.mid} 50%, ${COMP_POLES.deciduous})` }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: THEME.muted, marginTop: 4 }}>
                           <span>Conifer</span><span style={{ color: THEME.ink2, fontWeight: 500 }}><Term id="comp">Mixed (0) = the Forest colour</Term></span><span>Deciduous</span>
                         </div>
                       </div>
-                      <LegendRow items={LC9.slice(1).map(l => ({ label: l.key, color: l.color, texture: l.texture }))} />
+                      <LegendRow className="lg" items={LC9.slice(1).map(l => ({ label: l.key, color: l.color, texture: l.texture }))} />
                     </div>
                   </div>
                 </div>
@@ -3003,7 +3028,7 @@
         <div className="kchart" style={{ position: 'relative' }}>
           <svg viewBox={`0 0 ${KW} ${H}`}>
             <defs>
-              <pattern id="lcRail" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill={LC9[LC_RAIL_IDX].color} /><path d="M0 .5H4M.5 0V4" stroke="rgba(255,255,255,.38)" strokeWidth="1" /></pattern>
+              <pattern id="lcRail" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill={LC9[LC_RAIL_IDX].color} /></pattern>
               <pattern id="lcCimp" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill={LC9[LC_CIMP_IDX].color} /><circle cx="2" cy="2" r=".9" fill="rgba(38,73,20,.75)" /></pattern>
             </defs>
             {[0, .25, .5, .75, 1].map(t => <g key={t}><line className="grid" x1={pl} x2={KW - 4} y1={y(t)} y2={y(t)} /><text x={pl - 4} y={y(t) + 3} textAnchor="end">{Math.round(t * 100)}%</text></g>)}

@@ -71,6 +71,9 @@
     .legend i.hollow{background:none;border:1.5px solid var(--ghost)}
     .legend i.dash{width:14px;height:0;border-top:2px dashed var(--ghost);border-radius:0}
     .legend i.solid{width:14px;height:0;border-top:2px solid var(--ink);border-radius:0}
+    .legend.lg{gap:8px 18px;font-size:13px}                 /* Bank Explorer grid legend: larger */
+    .legend.lg span{gap:7px}
+    .legend.lg i{width:14px;height:14px;border-radius:3px}
     .note{font-size:12px;color:var(--ink-2);background:var(--accent-tint);border:1px solid var(--accent-tint-2);border-radius:5px;padding:8px 12px}
     .seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
     .seg button{appearance:none;border:0;background:var(--surface);font:500 12px var(--font-b);color:var(--ink-2);padding:4px 10px;cursor:pointer}
@@ -84,7 +87,7 @@
     .tip b{color:var(--ink);font-weight:600}
     .tip .num{color:var(--ink)}
     /* landcover textures */
-    .tx-rail{background-color:var(--lc-rail)!important;background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.38) 0 1px,transparent 1px 4px),repeating-linear-gradient(90deg,rgba(255,255,255,.38) 0 1px,transparent 1px 4px)}
+    .tx-rail{background-color:var(--lc-rail)!important}   /* plain purple; the white hatching was dropped 2026-09-28 */
     .tx-cimp{background-color:var(--lc-cimp)!important;background-image:radial-gradient(rgba(38,73,20,.75) .9px,transparent 1.1px);background-size:4px 4px;background-position:1px 1px}
     /* section (Summary Stats) */
     .sec{margin-top:14px;border-left:4px solid var(--c);overflow:hidden}
@@ -498,8 +501,8 @@ React.createElement(Term, { id: "tier", plain: true }, React.createElement("span
   style: { '--c': TIER_COLORS[tier] || THEME.faint }, title: TIER_LABELS[tier] || tier }, tier));
 
 
-const LegendRow = ({ items, style }) =>
-React.createElement("span", { className: "legend", style: style },
+const LegendRow = ({ items, style, className }) =>
+React.createElement("span", { className: className ? `legend ${className}` : 'legend', style: style },
 items.map((it) =>
 React.createElement("span", { key: it.label },
 React.createElement("i", { className: it.hollow ? 'hollow' : it.dash ? 'dash' : it.solid ? 'solid' : it.texture || '',
@@ -1427,6 +1430,11 @@ const BE_ZONE_WEIGHTS = [10, 6, 3, 2, 1];
 const BE_LC_LABELS = LC_LABELS_9;
 const BE_CH_COLS = 4;
 
+
+
+const BE_GRID_COLS = BE_CH_COLS + GRID_TOTAL_COLS;
+const BE_GRID_OVERHEAD = 84;
+
 function buildBankZoneGrid(zd, cols, zi) {
 
 
@@ -1643,6 +1651,22 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
 
 
   const showBeHover = (e, info) => setBeHover(info ? { ...info, x: e.clientX, y: e.clientY } : null);
+
+
+
+
+  const [beCell, setBeCell] = React.useState(10);
+  const beRoRef = React.useRef(null);
+  const beGridRef = React.useCallback((node) => {
+    if (beRoRef.current) {beRoRef.current.disconnect();beRoRef.current = null;}
+    if (!node) return;
+    const fit = () => setBeCell(Math.max(10, Math.min(16,
+    Math.floor((node.clientWidth - BE_GRID_OVERHEAD) / BE_GRID_COLS))));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(node);
+    beRoRef.current = ro;
+  }, []);
   const searchRef = React.useRef(null);
 
 
@@ -1752,15 +1776,16 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
 
 
 
-    React.createElement("div", { style: { overflowX: 'auto', maxWidth: '100%' } },
+
+    React.createElement("div", { ref: beGridRef, style: { overflowX: 'auto', maxWidth: '100%' } },
     React.createElement("div", { style: { display: 'flex', gap: 3, justifyContent: 'center', alignItems: 'flex-start', width: 'max-content', minWidth: '100%' } },
 
     chCells ?
     React.createElement("div", null,
     React.createElement("div", { style: {
         display: 'grid',
-        gridTemplateColumns: `repeat(${BE_CH_COLS}, 10px)`,
-        gridTemplateRows: `repeat(${GRID_ROWS}, 10px)`,
+        gridTemplateColumns: `repeat(${BE_CH_COLS}, ${beCell}px)`,
+        gridTemplateRows: `repeat(${GRID_ROWS}, ${beCell}px)`,
         gap: 1,
         background: THEME.line,
         padding: 1,
@@ -1775,7 +1800,7 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
       } : null),
       onMouseLeave: () => setBeHover(null),
       style: {
-        width: 10, height: 10, borderRadius: 1,
+        width: beCell, height: beCell, borderRadius: 1,
         backgroundColor: cell.lc < 0 ? THEME.line2 :
         cell.lc === 0 ? compToColor(cell.comp) :
         LAB_LC_FILLS[cell.lc],
@@ -1783,13 +1808,13 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
       } })
     )
     ),
-    React.createElement("div", { className: "text-center mt-1", style: { fontSize: 9, color: THEME.accentInk } },
+    React.createElement("div", { className: "text-center mt-1", style: { fontSize: 11, color: THEME.accentInk } },
     chLabel
     )
     ) :
     waterType === '' && attr ?
-    React.createElement("div", { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: GRID_ROWS * 11 + 2, minWidth: 30 } },
-    React.createElement("div", { style: { writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 9, color: THEME.accentInk, letterSpacing: 1 } }, "Stream")
+    React.createElement("div", { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: GRID_ROWS * (beCell + 1) + 1, minWidth: 30 } },
+    React.createElement("div", { style: { writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 11, color: THEME.accentInk, letterSpacing: 1 } }, "Stream")
     ) :
     null,
 
@@ -1810,8 +1835,8 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
         React.createElement("div", { key: zi, style: { opacity: zd ? 1 : 0.3 } },
         React.createElement("div", { style: {
             display: 'grid',
-            gridTemplateColumns: `repeat(${cols}, 10px)`,
-            gridTemplateRows: `repeat(${GRID_ROWS}, 10px)`,
+            gridTemplateColumns: `repeat(${cols}, ${beCell}px)`,
+            gridTemplateRows: `repeat(${GRID_ROWS}, ${beCell}px)`,
             gap: 1,
             background: THEME.line,
             padding: 1,
@@ -1826,7 +1851,7 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
           } : null),
           onMouseLeave: () => setBeHover(null),
           style: {
-            width: 10, height: 10, borderRadius: 1,
+            width: beCell, height: beCell, borderRadius: 1,
             backgroundColor: cell.lc < 0 ? THEME.line2 :
             cell.lc === 0 ? compToColor(cell.comp) :
             LAB_LC_FILLS[cell.lc],
@@ -1834,7 +1859,7 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
           } })
         )
         ),
-        React.createElement("div", { className: "text-center mt-1", style: { fontSize: 9, color: THEME.muted } },
+        React.createElement("div", { className: "text-center mt-1", style: { fontSize: 11, color: THEME.muted } },
         BE_ZONE_LABELS[zi]
         )
         ));
@@ -1881,14 +1906,14 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
     )
     ),
 
-    React.createElement("div", { style: { display: 'flex', gap: 22, alignItems: 'center', marginTop: 14, flexWrap: 'wrap' } },
+    React.createElement("div", { style: { display: 'flex', gap: 22, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' } },
     React.createElement("div", { style: { minWidth: 220, flex: 1 } },
-    React.createElement("div", { style: { height: 10, borderRadius: 3, border: `1px solid ${THEME.line}`, background: `linear-gradient(90deg, ${COMP_POLES.conifer}, ${COMP_POLES.mid} 50%, ${COMP_POLES.deciduous})` } }),
-    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: THEME.muted, marginTop: 3 } },
+    React.createElement("div", { style: { height: 14, borderRadius: 3, border: `1px solid ${THEME.line}`, background: `linear-gradient(90deg, ${COMP_POLES.conifer}, ${COMP_POLES.mid} 50%, ${COMP_POLES.deciduous})` } }),
+    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: THEME.muted, marginTop: 4 } },
     React.createElement("span", null, "Conifer"), React.createElement("span", { style: { color: THEME.ink2, fontWeight: 500 } }, React.createElement(Term, { id: "comp" }, "Mixed (0) = the Forest colour")), React.createElement("span", null, "Deciduous")
     )
     ),
-    React.createElement(LegendRow, { items: LC9.slice(1).map((l) => ({ label: l.key, color: l.color, texture: l.texture })) })
+    React.createElement(LegendRow, { className: "lg", items: LC9.slice(1).map((l) => ({ label: l.key, color: l.color, texture: l.texture })) })
     )
     )
     ),
@@ -2985,7 +3010,7 @@ function KLcStack({ rows }) {
     React.createElement("div", { className: "kchart", style: { position: 'relative' } },
     React.createElement("svg", { viewBox: `0 0 ${KW} ${H}` },
     React.createElement("defs", null,
-    React.createElement("pattern", { id: "lcRail", width: "4", height: "4", patternUnits: "userSpaceOnUse" }, React.createElement("rect", { width: "4", height: "4", fill: LC9[LC_RAIL_IDX].color }), React.createElement("path", { d: "M0 .5H4M.5 0V4", stroke: "rgba(255,255,255,.38)", strokeWidth: "1" })),
+    React.createElement("pattern", { id: "lcRail", width: "4", height: "4", patternUnits: "userSpaceOnUse" }, React.createElement("rect", { width: "4", height: "4", fill: LC9[LC_RAIL_IDX].color })),
     React.createElement("pattern", { id: "lcCimp", width: "4", height: "4", patternUnits: "userSpaceOnUse" }, React.createElement("rect", { width: "4", height: "4", fill: LC9[LC_CIMP_IDX].color }), React.createElement("circle", { cx: "2", cy: "2", r: ".9", fill: "rgba(38,73,20,.75)" }))
     ),
     [0, .25, .5, .75, 1].map((t) => React.createElement("g", { key: t }, React.createElement("line", { className: "grid", x1: pl, x2: KW - 4, y1: y(t), y2: y(t) }), React.createElement("text", { x: pl - 4, y: y(t) + 3, textAnchor: "end" }, Math.round(t * 100), "%"))),

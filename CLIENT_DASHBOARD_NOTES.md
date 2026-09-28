@@ -548,11 +548,13 @@ ramp cannot use it without the two scales bleeding into each other.
 **Landcover (`LC9`).** Four of the nine classes moved off the old all-green palette
 (`Shrub/Woodland`, `Shrub`, `Ground/Herbaceous` now a tan-to-yellow non-forest ramp;
 `Gravel/Abandoned Channel` now the blue-slate `#A6C8E0` called out in the design-decisions
-note, instead of reading as another shade of green or grey). Two classes carry a texture in
-addition to a fill colour, for the CVD/print/forced-colors case where colour alone cannot
-carry identity: `Canopy over Impervious` (`.tx-cimp`, a fine dot stipple) and `Railway`
-(`.tx-rail`, a cross-hatch). The CSS lives at `/* landcover textures */` near the top of the
-`<style>` block; `lcTextureClass(i)` looks up which class index gets which texture class.
+note, instead of reading as another shade of green or grey). `Canopy over Impervious`
+carries a texture in addition to a fill colour (`.tx-cimp`, a fine dot stipple), for the
+CVD/print/forced-colors case where colour alone cannot carry identity. `Railway` also had one
+(`.tx-rail`, a white cross-hatch) until 2026-09-28, when Colin asked for plain purple; the
+class is kept, now fill-only, so the lookups still work. The CSS lives at
+`/* landcover textures */` near the top of the `<style>` block; `lcTextureClass(i)` looks up
+which class index gets which texture class.
 
 **Tier ramp.** `TIER_COLORS` (P1 maroon → P5 blue-grey) is five swatches, and P5 (`#8E9AA1`)
 is deliberately desaturated - P5 is "no priority, gradient-accessible only," and reading as
