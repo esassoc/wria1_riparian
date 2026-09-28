@@ -1639,6 +1639,10 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
   }, [pendingBID, db]);
   const [showDropdown, setShowDropdown] = React.useState(false);
   const [beHover, setBeHover] = React.useState(null);
+
+
+
+  const showBeHover = (e, info) => setBeHover(info ? { ...info, x: e.clientX, y: e.clientY } : null);
   const searchRef = React.useRef(null);
 
 
@@ -1764,7 +1768,7 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
       } },
     chCells.map((cell, ci) =>
     React.createElement("div", { key: ci, className: cell.lc > 0 ? lcTextureClass(cell.lc) : '',
-      onMouseEnter: () => setBeHover(cell.lc >= 0 ? {
+      onMouseEnter: (e) => showBeHover(e, cell.lc >= 0 ? {
         lcName: BE_LC_LABELS[cell.lc], pct: cell.pct,
         zoneName: chLabel, zrp: null, rpContrib: null,
         comp: cell.lc === 0 ? cell.comp : null
@@ -1815,7 +1819,7 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
           } },
         cells.map((cell, ci) =>
         React.createElement("div", { key: ci, className: cell.lc > 0 ? lcTextureClass(cell.lc) : '',
-          onMouseEnter: () => setBeHover(cell.lc >= 0 ? {
+          onMouseEnter: (e) => showBeHover(e, cell.lc >= 0 ? {
             lcName: BE_LC_LABELS[cell.lc], pct: cell.pct,
             zoneName: BE_ZONE_LABELS[zi], zrp, rpContrib,
             comp: cell.lc === 0 ? cell.comp : null
@@ -1838,34 +1842,41 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
     }),
 
 
-    React.createElement("div", { style: { minWidth: 140, marginLeft: 10, paddingTop: 0 } },
-    beHover ?
-    React.createElement("div", { className: "tip", style: { position: 'static', whiteSpace: 'normal' } },
-    React.createElement("div", { style: { fontWeight: 600, marginBottom: 3, color: THEME.ink } }, beHover.lcName),
-    React.createElement("div", { className: "text-gray-600", style: { marginBottom: 2 } },
-    React.createElement("span", { className: "text-gray-400" }, beHover.zoneName, ":"), ' ',
-    React.createElement("span", { className: "font-mono font-semibold" }, (beHover.pct * 100).toFixed(1), "%")
-    ),
-    beHover.comp != null &&
-    React.createElement("div", { className: "text-gray-600", style: { marginBottom: 2 } },
-    React.createElement("span", { className: "text-gray-400" }, "Composition:"), ' ',
-    React.createElement("span", { className: "font-mono" }, beHover.comp.toFixed(2))
-    ),
 
-    beHover.zrp != null &&
-    React.createElement("div", { className: "text-gray-600", style: { marginBottom: 2 } },
-    React.createElement("span", { className: "text-gray-400" }, "Zone Restoration Priority:"), ' ',
-    React.createElement("span", { className: "font-mono font-semibold" }, beHover.zrp)
-    ),
 
-    beHover.rpContrib != null &&
-    React.createElement("div", { className: "text-gray-600" },
-    React.createElement("span", { className: "text-gray-400" }, "Contribution:"), ' ',
-    React.createElement("span", { className: "font-mono font-semibold", style: { color: THEME.accentInk } }, beHover.rpContrib, " pts")
-    )
+    beHover && ReactDOM.createPortal(
+      React.createElement("div", { className: "tip", style: {
+          position: 'fixed', whiteSpace: 'normal', minWidth: 160,
+          ...(beHover.x > window.innerWidth - 260 ?
+          { right: window.innerWidth - beHover.x + 14 } : { left: beHover.x + 14 }),
+          ...(beHover.y > window.innerHeight - 130 ?
+          { bottom: window.innerHeight - beHover.y + 14 } : { top: beHover.y + 14 })
+        } },
+      React.createElement("div", { style: { fontWeight: 600, marginBottom: 3, color: THEME.ink } }, beHover.lcName),
+      React.createElement("div", { className: "text-gray-600", style: { marginBottom: 2 } },
+      React.createElement("span", { className: "text-gray-400" }, beHover.zoneName, ":"), ' ',
+      React.createElement("span", { className: "font-mono font-semibold" }, (beHover.pct * 100).toFixed(1), "%")
+      ),
+      beHover.comp != null &&
+      React.createElement("div", { className: "text-gray-600", style: { marginBottom: 2 } },
+      React.createElement("span", { className: "text-gray-400" }, "Composition:"), ' ',
+      React.createElement("span", { className: "font-mono" }, beHover.comp.toFixed(2))
+      ),
 
-    ) :
-    null
+      beHover.zrp != null &&
+      React.createElement("div", { className: "text-gray-600", style: { marginBottom: 2 } },
+      React.createElement("span", { className: "text-gray-400" }, "Zone Restoration Priority:"), ' ',
+      React.createElement("span", { className: "font-mono font-semibold" }, beHover.zrp)
+      ),
+
+      beHover.rpContrib != null &&
+      React.createElement("div", { className: "text-gray-600" },
+      React.createElement("span", { className: "text-gray-400" }, "Contribution:"), ' ',
+      React.createElement("span", { className: "font-mono font-semibold", style: { color: THEME.accentInk } }, beHover.rpContrib, " pts")
+      )
+
+      ),
+      document.body
     )
     )
     ),

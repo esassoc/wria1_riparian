@@ -1657,6 +1657,10 @@
       }, [pendingBID, db]);
       const [showDropdown, setShowDropdown] = React.useState(false);
       const [beHover, setBeHover] = React.useState(null);
+      // Grid hover: remember the pointer so the tooltip floats beside it rather than
+      // taking a slot in the grid row (the slot widened the row and toggled the
+      // scrollbar on every hover, which shook the grid).
+      const showBeHover = (e, info) => setBeHover(info ? { ...info, x: e.clientX, y: e.clientY } : null);
       const searchRef = React.useRef(null);
 
       // Close dropdown on outside click
@@ -1782,7 +1786,7 @@
                           }}>
                             {chCells.map((cell, ci) => (
                               <div key={ci} className={cell.lc > 0 ? lcTextureClass(cell.lc) : ''}
-                                onMouseEnter={() => setBeHover(cell.lc >= 0 ? {
+                                onMouseEnter={(e) => showBeHover(e, cell.lc >= 0 ? {
                                   lcName: BE_LC_LABELS[cell.lc], pct: cell.pct,
                                   zoneName: chLabel, zrp: null, rpContrib: null,
                                   comp: cell.lc === 0 ? cell.comp : null,
@@ -1833,7 +1837,7 @@
                             }}>
                               {cells.map((cell, ci) => (
                                 <div key={ci} className={cell.lc > 0 ? lcTextureClass(cell.lc) : ''}
-                                  onMouseEnter={() => setBeHover(cell.lc >= 0 ? {
+                                  onMouseEnter={(e) => showBeHover(e, cell.lc >= 0 ? {
                                     lcName: BE_LC_LABELS[cell.lc], pct: cell.pct,
                                     zoneName: BE_ZONE_LABELS[zi], zrp, rpContrib,
                                     comp: cell.lc === 0 ? cell.comp : null,
@@ -1855,10 +1859,17 @@
                         );
                       })}
 
-                      {/* Hover tooltip panel */}
-                      <div style={{ minWidth: 140, marginLeft: 10, paddingTop: 0 }}>
-                        {beHover ? (
-                          <div className="tip" style={{ position: 'static', whiteSpace: 'normal' }}>
+                      {/* Hover tooltip: portalled to the body and fixed beside the pointer, so it
+                          never takes space in (or gets clipped by) the grid's scroll container.
+                          It flips left/up near the window edge. */}
+                        {beHover && ReactDOM.createPortal(
+                          <div className="tip" style={{
+                            position: 'fixed', whiteSpace: 'normal', minWidth: 160,
+                            ...(beHover.x > window.innerWidth - 260
+                              ? { right: window.innerWidth - beHover.x + 14 } : { left: beHover.x + 14 }),
+                            ...(beHover.y > window.innerHeight - 130
+                              ? { bottom: window.innerHeight - beHover.y + 14 } : { top: beHover.y + 14 }),
+                          }}>
                             <div style={{ fontWeight: 600, marginBottom: 3, color: THEME.ink }}>{beHover.lcName}</div>
                             <div className="text-gray-600" style={{ marginBottom: 2 }}>
                               <span className="text-gray-400">{beHover.zoneName}:</span>{' '}
@@ -1882,9 +1893,9 @@
                                 <span className="font-mono font-semibold" style={{ color: THEME.accentInk }}>{beHover.rpContrib} pts</span>
                               </div>
                             )}
-                          </div>
-                        ) : null}
-                      </div>
+                          </div>,
+                          document.body
+                        )}
                     </div>
                     </div>
                     {/* LC Legend - matches Score Lab */}
