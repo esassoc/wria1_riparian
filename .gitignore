@@ -22,3 +22,10 @@ aspect_circular_run.log
 aspect_gis_update_*.csv
 Field_Definitions*.xlsx
 tier_update_*.csv
+
+# GIS-side deliverables (ArcGIS Online pop-up, layer files, field dictionary).
+# Not part of building, testing or deploying the dashboard, so kept local only.
+tools/arcade/
+tools/make_lyrx.py
+tools/add_color_tab.py
+tools/fill_field_definitions.py
