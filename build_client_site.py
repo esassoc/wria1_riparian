@@ -401,7 +401,8 @@ def load_s_track_scores(csv_path):
 
 
 def load_gnis_names(csv_path, bids):
-    """BID -> GNIS stream name (None when unnamed), from data_overrides/gnis_names.csv.
+    """From data_overrides/gnis_names.csv: (BID -> GNIS stream name or None when unnamed,
+    BID -> reach length in feet or None).
 
     Fails if the file is missing, if any bank in the bids table is missing from it, or if a
     bank carries two different names, rather than shipping a stream filter that silently
@@ -410,7 +411,7 @@ def load_gnis_names(csv_path, bids):
     if not os.path.isfile(csv_path):
         raise RuntimeError(f"GNIS names not found: {csv_path}. Generate it with "
                            "python tools/make_gnis_names.py")
-    names, seen = {}, set()
+    names, lengths, seen = {}, {}, set()
     with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
         for row in csv.DictReader(line for line in f if not line.startswith("#")):
             bid, name = row["bid"], (row["gnis_name"] or "").strip() or None
@@ -418,10 +419,26 @@ def load_gnis_names(csv_path, bids):
                 raise RuntimeError(f"GNIS names: {bid} carries two names in {csv_path}")
             seen.add(bid)
             names[bid] = name
+            lengths[bid] = float(row["reach_len_ft"]) if row["reach_len_ft"] else None
     missing = [b for b in bids if b not in seen]
     if missing:
         raise RuntimeError(f"GNIS names: {len(missing)} BID(s) not in {csv_path} (e.g. {missing[:5]})")
-    return names
+    return names, lengths
+
+
+def stream_miles(bids, names, lengths):
+    """[(gn, miles)] per GNIS name (None = unnamed reaches), summed once per reach (the BID
+    prefix; both banks of a reach share one length). miles is None for a name whose reaches
+    carry no length (lakes)."""
+    per_reach = {}
+    for bid in bids:
+        per_reach.setdefault(bid.rsplit("_", 1)[0], (names[bid], lengths[bid]))
+    totals = {}
+    for gn, ft in per_reach.values():
+        t = totals.setdefault(gn, None)
+        if ft is not None:
+            totals[gn] = (t or 0.0) + ft
+    return [(gn, None if ft is None else round(ft / 5280.0, 1)) for gn, ft in totals.items()]
 
 
 def apply_reach_override(bid_rows, attr_keys, csv_path):
@@ -693,6 +710,9 @@ def build_sqlite(bid_json_path, sqlite_path, main_json_path):
         )
     """)
     conn.execute("CREATE TABLE lab_meta (key TEXT PRIMARY KEY, value TEXT)")
+    # Stream length per GNIS name (gn NULL = all unnamed reaches), in miles over the reaches
+    # that carry scored banks. Drives the StreamPicker's bars. mi NULL = no length (lakes).
+    conn.execute("CREATE TABLE streams (gn TEXT, mi REAL)")
 
     # Field order matching the CREATE TABLE
     attr_keys = [
@@ -713,7 +733,7 @@ def build_sqlite(bid_json_path, sqlite_path, main_json_path):
     placeholders = ",".join(["?"] * (8 + len(attr_keys)))
 
     s_track = load_s_track_scores(SCORES_CSV)
-    gnis = load_gnis_names(GNIS_CSV, d["bids"])
+    gnis, reach_len = load_gnis_names(GNIS_CSV, d["bids"])
     aspect_override = load_aspect_override(ASPECT_OVERRIDE_CSV)
     if aspect_override:
         missing_asp = [bid for bid in d["bids"] if bid not in aspect_override]
@@ -868,6 +888,11 @@ def build_sqlite(bid_json_path, sqlite_path, main_json_path):
     print(f"    {reach_override_summary}")
 
     conn.executemany(f"INSERT INTO bids VALUES ({placeholders})", bid_rows)
+    streams = stream_miles(d["bids"], gnis, reach_len)
+    conn.executemany("INSERT INTO streams VALUES (?,?)", streams)
+    named_mi = sum(mi for gn, mi in streams if gn and mi)
+    print(f"    Streams: {sum(1 for gn, _ in streams if gn)} GNIS names, {named_mi:,.1f} named mi, "
+          f"{next((mi for gn, mi in streams if gn is None), 0):,.1f} unnamed mi")
     conn.executemany("INSERT INTO zones VALUES (" + ",".join(["?"] * 18) + ")", zone_rows)
 
     # Waterbody (in-channel) BIDs -- Fix 2: built directly from BID_ZID_LC_20260501.csv

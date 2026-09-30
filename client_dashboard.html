@@ -195,17 +195,18 @@
     .spk input[type="search"]{width:100%;font:13px var(--font-b);padding:6px 9px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink)}
     .spk-all{appearance:none;border:0;background:none;font:500 11.5px var(--font-b);color:var(--accent-ink);cursor:pointer;padding:5px 0 0}
     .spk-list{margin-top:6px;max-height:208px;overflow-y:auto;border:1px solid var(--line-2);border-radius:5px}
-    .spk-row{appearance:none;border:0;border-bottom:1px solid var(--line-2);background:none;width:100%;display:grid;grid-template-columns:14px minmax(0,1fr) 64px 38px;gap:8px;align-items:center;padding:5px 8px;font:12.5px var(--font-b);color:var(--ink);text-align:left;cursor:pointer}
+    .spk-row{appearance:none;border:0;border-bottom:1px solid var(--line-2);background:none;width:100%;display:grid;grid-template-columns:14px minmax(0,1fr) 92px;gap:8px;align-items:center;padding:5px 8px;font:12.5px var(--font-b);color:var(--ink);text-align:left;cursor:pointer}
     .spk-row:last-child{border-bottom:0}
     .spk-row:hover{background:var(--surface-2)}
     .spk-row .box{width:12px;height:12px;border:1.5px solid var(--faint);border-radius:3px}
     .spk-row.on{background:color-mix(in srgb,var(--c) 9%,transparent)}
     .spk-row.on .box{background:var(--c);border-color:var(--c);box-shadow:inset 0 0 0 2px var(--surface)}
     .spk-row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .spk-row .bar{height:5px;background:var(--line-2);border-radius:3px;overflow:hidden}
-    .spk-row .bar i{display:block;height:100%;background:var(--c);opacity:.55;border-radius:3px}
-    .spk-row.on .bar i{opacity:1}
-    .spk-row .n{font-size:11px;color:var(--muted);text-align:right}
+    /* length bar with the miles printed inside it (text sits over the fill, left-aligned) */
+    .spk-row .bar{position:relative;height:16px;background:var(--line-2);border-radius:3px;overflow:hidden}
+    .spk-row .bar i{position:absolute;left:0;top:0;bottom:0;background:color-mix(in srgb,var(--c) 38%,var(--surface));border-radius:3px}
+    .spk-row.on .bar i{background:color-mix(in srgb,var(--c) 62%,var(--surface))}
+    .spk-row .bar b{position:relative;display:block;padding:0 5px;font-size:10.5px;font-weight:500;line-height:16px;color:var(--ink);white-space:nowrap}
     .spk-none{padding:10px;font-size:12px;color:var(--muted);text-align:center}
     .be{display:grid;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:18px} /* minmax(0,1fr), NOT a bare 1fr: a bare fr track will not shrink below its content's
        min-content width. The zone grid inside is ~772px intrinsic, so a bare 1fr pushed the
@@ -1605,15 +1606,16 @@
         return r[0].values.map(([bid, gn, srz, rpsf, tier]) => ({ bid, gn, srz, rpsf, tier }));
       } catch (e) { console.error('sqlSearchBids error:', e); return []; }
     }
-    // Named streams with bank counts (most banks first) and the unnamed-reach count, for the
-    // StreamPicker. null when the database predates the gn column.
-    function sqlStreamCounts(db) {
+    // Named streams with their length in miles (longest first; lakes, which carry no stream
+    // length, last) and the unnamed-reach miles, for the StreamPicker. null when the database
+    // predates the streams table.
+    function sqlStreamMiles(db) {
       try {
-        const r = db.exec(`SELECT gn, COUNT(*) FROM bids GROUP BY gn ORDER BY COUNT(*) DESC, gn`);
+        const r = db.exec(`SELECT gn, mi FROM streams ORDER BY mi IS NULL, mi DESC, gn`);
         if (!r.length) return null;
         const named = [];
-        let unnamed = 0;
-        r[0].values.forEach(([name, n]) => { if (name == null) unnamed = n; else named.push({ name, n }); });
+        let unnamed = null;
+        r[0].values.forEach(([name, mi]) => { if (name == null) unnamed = mi; else named.push({ name, mi }); });
         return { named, unnamed };
       } catch (e) { return null; }
     }
@@ -2509,32 +2511,37 @@
     }
 
     // GNIS stream-name picker for BID Query's River Context section. Nearly 200 names are too
-    // many for a chip group, so: a type-to-narrow list with each stream's bank count drawn as
-    // a bar, "select every match" for the typed text (e.g. "Fork" -> all three forks), two
-    // presets, and the picks shown as removable chips. Empty selection = no stream filter.
-    // Top-level (not nested in BIDQueryPanel) so the search box keeps focus across renders.
+    // many for a chip group, so: a type-to-narrow list with each stream's length drawn as a
+    // bar (miles printed in it), "select every match" for the typed text (e.g. "Fork" -> all
+    // three forks), two presets, and the picks shown as removable chips. Empty selection = no
+    // stream filter. Top-level (not nested in BIDQueryPanel) so the search box keeps focus.
     function StreamPicker({ db, selected, setSelected }) {
       const [q, setQ] = React.useState('');
-      const streams = React.useMemo(() => dbReady(db) ? sqlStreamCounts(db) : null, [db]);
+      const streams = React.useMemo(() => dbReady(db) ? sqlStreamMiles(db) : null, [db]);
       if (!streams) return null;
       const hue = THEME.sections.riv.hue;
-      const max = streams.named.length ? streams.named[0].n : 1;
+      // Scale to the longest named stream.
+      const max = streams.named.length && streams.named[0].mi ? streams.named[0].mi : 1;
+      const fmtMi = mi => mi >= 100 ? `${Math.round(mi).toLocaleString()} mi` : `${mi.toFixed(1)} mi`;
       const nq = q.trim().toLowerCase();
       const matches = nq ? streams.named.filter(s => s.name.toLowerCase().includes(nq)) : streams.named;
       const toggle = v => { const s = new Set(selected); s.has(v) ? s.delete(v) : s.add(v); setSelected(s); };
       const addAll = names => setSelected(new Set([...selected, ...names]));
       const presets = [
         ['Nooksack mainstem + forks', streams.named.filter(s => /Nooksack River$/.test(s.name)).map(s => s.name)],
-        ['10 with the most banks', streams.named.slice(0, 10).map(s => s.name)],
+        ['10 longest', streams.named.slice(0, 10).map(s => s.name)],
       ];
-      const Row = ({ v, label, n }) => {
+      const Row = ({ v, label, mi, tip }) => {
         const on = selected.has(v);
         return (
-          <button type="button" role="option" aria-selected={on} className={`spk-row ${on ? 'on' : ''}`} onClick={() => toggle(v)}>
+          <button type="button" role="option" aria-selected={on} className={`spk-row ${on ? 'on' : ''}`} onClick={() => toggle(v)}
+            title={tip || (mi == null ? 'No stream length (lake or pond)' : undefined)}>
             <i className="box" />
             <span className="nm">{label}</span>
-            <span className="bar"><i style={{ width: `${Math.max(2, n / max * 100)}%` }} /></span>
-            <span className="num n">{n.toLocaleString()}</span>
+            <span className="bar">
+              {mi != null && <i style={{ width: `${Math.min(100, Math.max(3, mi / max * 100))}%` }} />}
+              <b className="num">{mi == null ? '—' : fmtMi(mi)}</b>
+            </span>
           </button>
         );
       };
@@ -2560,11 +2567,12 @@
             </button>
           )}
           <div className="spk-list" role="listbox" aria-multiselectable="true" aria-label="Named streams">
-            {!nq && <Row v={GN_UNNAMED} label={<em>Unnamed reaches</em>} n={streams.unnamed} />}
-            {matches.map(s => <Row key={s.name} v={s.name} label={s.name} n={s.n} />)}
+            {/* Unnamed reaches stay pinned on top but show no length: their mileage is thousands of
+                unrelated reaches, not one stream, so it reads as noise next to the named bars. */}
+            {!nq && <Row v={GN_UNNAMED} label={<em>Unnamed reaches</em>} mi={null} tip="Unnamed reaches have no single stream length" />}
+            {matches.map(s => <Row key={s.name} v={s.name} label={s.name} mi={s.mi} />)}
             {nq && !matches.length && <div className="spk-none">No named stream matches &ldquo;{q.trim()}&rdquo;</div>}
           </div>
-          <div style={{ fontSize: 11, color: THEME.muted, marginTop: 4 }}>Bars show banks per stream. Several streams share a name (e.g. Anderson Creek); pair with a Salmon Recovery Zone to narrow.</div>
         </div>
       );
     }
@@ -3707,11 +3715,13 @@
       };
 
       // Points bucketed for Recharts: by tier (canonical colours) or by RP decile (sequential ramp).
+      // Recharts paints series in array order, so the last one lands on top: tiers go P5 -> P1
+      // (a P1 dot is never hidden under a lower tier), deciles low -> high.
       const mapBuckets = React.useMemo(() => {
         if (mapMode === 'tier') {
           const by = Object.fromEntries(Object.keys(TIER_COLORS).map(t => [t, { fill: TIER_COLORS[t], points: [], name: t }]));
           queryResult.mapPts.forEach(pt => { (by[pt.tier] || by.P5).points.push(pt); });
-          return Object.values(by).filter(b => b.points.length > 0);
+          return Object.values(by).reverse().filter(b => b.points.length > 0);
         }
         const N = 10;
         const buckets = Array.from({ length: N }, (_, i) => ({ fill: rpRamp((i + 0.5) * (100 / N)), points: [], name: `${i * 10}–${i * 10 + 10}` }));
@@ -3867,7 +3877,6 @@
                 </CollapsibleSection>
 
                 <CollapsibleSection title="River Context" defaultOpen={false} badge={bidBadges.river} hue={THEME.sections.riv.hue}>
-                  <StreamPicker db={db} selected={selGn} setSelected={setSelGn} />
                   <div className="fl"><span><Term id="zones">Buffer zones</Term> <span style={{ fontWeight: 400, color: THEME.muted }}>(zone charts only)</span></span></div>
                   <div className="chips">
                     {bufZoneLabels.map((lbl, i) => {
@@ -3878,7 +3887,10 @@
                   <FilterGroup title="Historic Migration Zone" term="zones" labels={labelSets.hmz || []} attr="hmz" selected={selHmz} setSelected={setSelHmz} display={v => ({ Y: 'Yes', N: 'No' })[v] || v} />
                   <FilterGroup title="Bankfull width class" term="bfw" labels={labelSets.bfw || []} attr="bfw" selected={selBfw} setSelected={setSelBfw} />
                   <FilterGroup title="Waterbody type" labels={WT_LABELS} attr="wt" selected={selWT || new Set(WT_LABELS)} setSelected={setSelWT} />
-                  <FilterGroup title="Salmon Recovery Zone" labels={labelSets.srz || []} attr="srz" selected={selSrz} setSelected={setSelSrz} display={displaySrz} />
+                  {/* Chips keep the stored NF/MF/SF short forms to stay compact; everywhere else
+                      shows the spelled-out displaySrz name. */}
+                  <FilterGroup title="Salmon Recovery Zone" labels={labelSets.srz || []} attr="srz" selected={selSrz} setSelected={setSelSrz} />
+                  <StreamPicker db={db} selected={selGn} setSelected={setSelGn} />
                 </CollapsibleSection>
 
                 <CollapsibleSection title="Administrative" defaultOpen={false} badge={bidBadges.admin} hue={THEME.sections.adm.hue}>

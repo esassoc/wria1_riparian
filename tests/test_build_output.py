@@ -124,6 +124,17 @@ def main():
         "SELECT SUM(gn IS NOT NULL), SUM(gn = '') FROM bids").fetchone()
     check(n_named and n_named > 5000, f"gn is set on the named reaches (got {n_named})")
     check(not n_empty, f"gn carries no empty strings (got {n_empty})")
+    # streams: one row per GNIS name in bids plus one unnamed row, lengths in miles.
+    n_gn = conn.execute("SELECT COUNT(DISTINCT gn) FROM bids").fetchone()[0]
+    n_st, n_null_gn, n_dupe = conn.execute(
+        "SELECT COUNT(*), SUM(gn IS NULL), COUNT(*) - COUNT(DISTINCT COALESCE(gn, '')) FROM streams").fetchone()
+    check(n_st == n_gn + 1 and n_null_gn == 1 and n_dupe == 0,
+          f"streams has one row per GNIS name ({n_gn}) plus one unnamed row (got {n_st}, {n_null_gn} unnamed, {n_dupe} dupes)")
+    orphans = conn.execute(
+        "SELECT COUNT(*) FROM streams WHERE gn IS NOT NULL AND gn NOT IN (SELECT gn FROM bids WHERE gn IS NOT NULL)").fetchone()[0]
+    check(orphans == 0, f"every streams.gn exists in bids (got {orphans} orphans)")
+    top = conn.execute("SELECT gn, mi FROM streams WHERE gn IS NOT NULL ORDER BY mi DESC LIMIT 1").fetchone()
+    check(top and 20 < top[1] < 60, f"longest named stream is a plausible 20-60 mi (got {top})")
 
     for c in ("rp", "rpf", "sol", "slp", "rpa"):
         check(c not in cols, f"legacy linear column {c} is gone from bids")
