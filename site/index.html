@@ -7,11 +7,14 @@
   <!--
     WRIA 1 Riparian Restoration Prioritization
     Deep link to a single bank: append #bid/<BID_ID> to this page's URL.
+    Deep link to Summary Stats with a filter applied: append #srz/<zone>, #zoning/<group>,
+    #bfw/<size class> or #stream/<GNIS name> (values URL-encoded). Pairs chain:
+    #stream/Anderson%20Creek/srz/Lower%20Mainstem%20Nooksack.
   -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <!-- Start the two big downloads before the scripts below parse and compile -->
-  <link rel="preload" as="fetch" href="data/bids.44f24f35.sqlite.gz" crossorigin>
+  <link rel="preload" as="fetch" href="data/bids.e9c84395.sqlite.gz" crossorigin>
   <link rel="preload" as="fetch" href="vendor/sql-wasm.wasm" crossorigin>
   <style id="tw">*,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/*! tailwindcss v3.4.19 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border:0 solid #e5e7eb}:after,:before{--tw-content:""}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:ui-sans-serif,system-ui,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:#9ca3af}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.container{width:100%}@media (min-width:640px){.container{max-width:640px}}@media (min-width:768px){.container{max-width:768px}}@media (min-width:1024px){.container{max-width:1024px}}@media (min-width:1280px){.container{max-width:1280px}}@media (min-width:1536px){.container{max-width:1536px}}.visible{visibility:visible}.static{position:static}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.top-0{top:0}.mx-2{margin-left:.5rem;margin-right:.5rem}.mb-1{margin-bottom:.25rem}.mb-1\.5{margin-bottom:.375rem}.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.ml-1{margin-left:.25rem}.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:.75rem}.mt-4{margin-top:1rem}.block{display:block}.inline-block{display:inline-block}.inline{display:inline}.flex{display:flex}.inline-flex{display:inline-flex}.table{display:table}.grid{display:grid}.hidden{display:none}.h-10{height:2.5rem}.h-2\.5{height:.625rem}.h-3{height:.75rem}.h-8{height:2rem}.h-screen{height:100vh}.min-h-screen{min-height:100vh}.w-0\.5{width:.125rem}.w-12{width:3rem}.w-28{width:7rem}.w-3{width:.75rem}.w-44{width:11rem}.flex-1{flex:1 1 0%}.shrink{flex-shrink:1}.transform{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.cursor-default{cursor:default}.cursor-pointer{cursor:pointer}.grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}.grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.items-baseline{align-items:baseline}.justify-center{justify-content:center}.gap-0\.5{gap:.125rem}.gap-1\.5{gap:.375rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.gap-x-4{-moz-column-gap:1rem;column-gap:1rem}.gap-x-6{-moz-column-gap:1.5rem;column-gap:1.5rem}.gap-y-1{row-gap:.25rem}.gap-y-5{row-gap:1.25rem}.overflow-hidden{overflow:hidden}.rounded{border-radius:.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:.5rem}.rounded-sm{border-radius:.125rem}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-t{border-top-width:1px}.border-gray-200{--tw-border-opacity:1;border-color:rgb(229 231 235/var(--tw-border-opacity,1))}.bg-gray-800{--tw-bg-opacity:1;background-color:rgb(31 41 55/var(--tw-bg-opacity,1))}.px-1{padding-left:.25rem;padding-right:.25rem}.px-1\.5{padding-left:.375rem;padding-right:.375rem}.py-0\.5{padding-top:.125rem;padding-bottom:.125rem}.py-1{padding-top:.25rem;padding-bottom:.25rem}.py-12{padding-top:3rem;padding-bottom:3rem}.pl-3{padding-left:.75rem}.pt-3{padding-top:.75rem}.text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}.font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:.875rem;line-height:1.25rem}.text-xs{font-size:.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-normal{font-weight:400}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.capitalize{text-transform:capitalize}.italic{font-style:italic}.leading-tight{line-height:1.25}.text-gray-400{--tw-text-opacity:1;color:rgb(156 163 175/var(--tw-text-opacity,1))}.text-gray-500{--tw-text-opacity:1;color:rgb(107 114 128/var(--tw-text-opacity,1))}.text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99/var(--tw-text-opacity,1))}.text-gray-700{--tw-text-opacity:1;color:rgb(55 65 81/var(--tw-text-opacity,1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.underline{text-decoration-line:underline}.shadow-sm{--tw-shadow:0 1px 2px 0 rgba(0,0,0,.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.outline{outline-style:solid}.filter{filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.transition{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,-webkit-backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter,-webkit-backdrop-filter;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.group:hover .group-hover\:block{display:block}@media (min-width:768px){.md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (min-width:1024px){.lg\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.lg\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}}</style>
   <script src="vendor/react.production.min.js"></script>
@@ -169,6 +172,22 @@
     .applied .lab{font-size:11px;color:var(--muted);margin-right:2px}
     .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
     .chips{display:flex;flex-wrap:wrap;gap:5px}
+    /* StreamPicker */
+    .spk input[type="search"]{width:100%;font:13px var(--font-b);padding:6px 9px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink)}
+    .spk-all{appearance:none;border:0;background:none;font:500 11.5px var(--font-b);color:var(--accent-ink);cursor:pointer;padding:5px 0 0}
+    .spk-list{margin-top:6px;max-height:208px;overflow-y:auto;border:1px solid var(--line-2);border-radius:5px}
+    .spk-row{appearance:none;border:0;border-bottom:1px solid var(--line-2);background:none;width:100%;display:grid;grid-template-columns:14px minmax(0,1fr) 64px 38px;gap:8px;align-items:center;padding:5px 8px;font:12.5px var(--font-b);color:var(--ink);text-align:left;cursor:pointer}
+    .spk-row:last-child{border-bottom:0}
+    .spk-row:hover{background:var(--surface-2)}
+    .spk-row .box{width:12px;height:12px;border:1.5px solid var(--faint);border-radius:3px}
+    .spk-row.on{background:color-mix(in srgb,var(--c) 9%,transparent)}
+    .spk-row.on .box{background:var(--c);border-color:var(--c);box-shadow:inset 0 0 0 2px var(--surface)}
+    .spk-row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .spk-row .bar{height:5px;background:var(--line-2);border-radius:3px;overflow:hidden}
+    .spk-row .bar i{display:block;height:100%;background:var(--c);opacity:.55;border-radius:3px}
+    .spk-row.on .bar i{opacity:1}
+    .spk-row .n{font-size:11px;color:var(--muted);text-align:right}
+    .spk-none{padding:10px;font-size:12px;color:var(--muted);text-align:center}
     .be{display:grid;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:18px} /* minmax(0,1fr), NOT a bare 1fr: a bare fr track will not shrink below its content's
        min-content width. The zone grid inside is ~772px intrinsic, so a bare 1fr pushed the
        whole page to 822px at a 768px viewport. Same defect that was fixed on .bq in Task 6. */
@@ -193,7 +212,7 @@ const {
 
 
 
-const DB_URL = 'data/bids.44f24f35.sqlite.gz';
+const DB_URL = 'data/bids.e9c84395.sqlite.gz';
 const SQLJS_BASE = 'vendor/';
 
 async function loadDatabase() {
@@ -363,6 +382,10 @@ const SRZ_DISPLAY = {
   'Lower SF Nooksack': 'Lower South Fork Nooksack', 'Upper SF Nooksack': 'Upper South Fork Nooksack'
 };
 const displaySrz = (v) => SRZ_DISPLAY[v] || v || 'Unknown';
+
+
+const GN_UNNAMED = '__unnamed__';
+const gnLabel = (v) => v == null || v === GN_UNNAMED ? 'Unnamed reach' : v;
 
 
 const SRZ_RAW = Object.fromEntries(Object.entries(SRZ_DISPLAY).map(([raw, disp]) => [disp, raw]));
@@ -1554,15 +1577,27 @@ function sqlSearchBids(db, term) {
     const like = esc(term + '%');
     const contains = esc('%' + term + '%');
     const r = db.exec(
-      `SELECT bid, str, srz, rpsf, tier FROM bids
-           WHERE bid LIKE ${like} OR str LIKE ${like} OR srz LIKE ${like}
-              OR bid LIKE ${contains} OR str LIKE ${contains} OR srz LIKE ${contains}
-           ORDER BY CASE WHEN bid LIKE ${like} OR str LIKE ${like} OR srz LIKE ${like} THEN 0 ELSE 1 END, bid
+      `SELECT bid, gn, srz, rpsf, tier FROM bids
+           WHERE bid LIKE ${like} OR gn LIKE ${like} OR srz LIKE ${like}
+              OR bid LIKE ${contains} OR gn LIKE ${contains} OR srz LIKE ${contains}
+           ORDER BY CASE WHEN bid LIKE ${like} OR gn LIKE ${like} OR srz LIKE ${like} THEN 0 ELSE 1 END, bid
            LIMIT 50`
     );
     if (!r.length) return [];
-    return r[0].values.map(([bid, str, srz, rpsf, tier]) => ({ bid, str, srz, rpsf, tier }));
+    return r[0].values.map(([bid, gn, srz, rpsf, tier]) => ({ bid, gn, srz, rpsf, tier }));
   } catch (e) {console.error('sqlSearchBids error:', e);return [];}
+}
+
+
+function sqlStreamCounts(db) {
+  try {
+    const r = db.exec(`SELECT gn, COUNT(*) FROM bids GROUP BY gn ORDER BY COUNT(*) DESC, gn`);
+    if (!r.length) return null;
+    const named = [];
+    let unnamed = 0;
+    r[0].values.forEach(([name, n]) => {if (name == null) unnamed = n;else named.push({ name, n });});
+    return { named, unnamed };
+  } catch (e) {return null;}
 }
 
 
@@ -1727,7 +1762,7 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
     React.createElement("button", { key: a.bid, type: "button", onClick: () => {selectBID(a.bid);setSearchTerm(a.bid);setShowDropdown(false);},
       style: { width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13, background: 'none', border: 0, borderBottom: `1px solid ${THEME.line2}`, cursor: 'pointer', display: 'flex', gap: 8, alignItems: 'center' } },
     React.createElement("span", { className: "num", style: { fontWeight: 500, color: THEME.accentInk } }, a.bid),
-    React.createElement("span", { style: { color: THEME.ink2 } }, a.str || 'Unknown'),
+    React.createElement("span", { style: { color: a.gn ? THEME.ink2 : THEME.muted } }, gnLabel(a.gn)),
     React.createElement("span", { style: { color: THEME.muted, fontSize: 12 } }, displaySrz(a.srz)),
     React.createElement("span", { style: { marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' } },
     React.createElement("span", { className: "num", style: { fontSize: 12, color: THEME.ink2 } }, a.rpsf), React.createElement(TierPill, { tier: a.tier })
@@ -1751,7 +1786,7 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
 
     React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 } },
     React.createElement("span", { className: "num", style: { font: '600 22px var(--font-h)', color: THEME.ink } }, selectedBID),
-    React.createElement("span", { style: { color: THEME.muted } }, attr.str || 'Unknown stream'),
+    React.createElement("span", { style: { color: attr.gn ? THEME.ink2 : THEME.muted, fontWeight: attr.gn ? 500 : 400 } }, gnLabel(attr.gn)),
     React.createElement(TierPill, { tier: attr.tier }),
     React.createElement(Chip, { dot: true, color: colorOf('srz', attr.srz) }, displaySrz(attr.srz)),
     attr.chk === 'Y' && React.createElement(Chip, { dot: true, color: THEME.sections.fish.hue }, "Early Chinook"),
@@ -2010,7 +2045,19 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
     React.createElement("div", { className: "card" },
     React.createElement("div", { className: "card-h" }, React.createElement("h3", null, "Location")),
     React.createElement("div", { className: "card-b", style: { display: 'grid', gap: 8 } },
-    React.createElement("div", null, React.createElement("span", { style: { fontSize: 11, color: THEME.muted } }, "Stream"), React.createElement("div", { className: "font-medium" }, attr.str || '-')),
+
+    React.createElement("div", { style: { borderLeft: `3px solid ${THEME.sections.riv.hue}`, paddingLeft: 10, marginBottom: 2 } },
+    React.createElement("span", { style: { fontSize: 11, color: THEME.muted } }, "Stream"),
+    React.createElement("div", { style: { font: `600 19px/1.2 var(--font-h)`, color: attr.gn ? THEME.ink : THEME.muted, fontStyle: attr.gn ? 'normal' : 'italic' } }, gnLabel(attr.gn)),
+    React.createElement("div", { style: { fontSize: 11.5, color: THEME.muted, marginTop: 2 } },
+    attr.str || 'Unknown feature type', attr.rid ? React.createElement(React.Fragment, null, " · reach ", React.createElement("span", { className: "num" }, attr.rid)) : null
+    ),
+    attr.gn &&
+    React.createElement("a", { href: `#stream/${encodeURIComponent(attr.gn)}`, style: { fontSize: 12, color: THEME.accentInk, display: 'inline-block', marginTop: 4 } }, "Summary stats for ",
+    attr.gn, " ›"
+    )
+
+    ),
     React.createElement("div", null, React.createElement("span", { style: { fontSize: 11, color: THEME.muted } }, "Salmon Recovery Zone"),
     React.createElement("div", null, React.createElement(Chip, { dot: true, color: colorOf('srz', attr.srz) }, displaySrz(attr.srz)))
     ),
@@ -2448,6 +2495,67 @@ function CollapsibleSection({ title, defaultOpen = true, badge, hue, tint, icon,
 
 
 
+function StreamPicker({ db, selected, setSelected }) {
+  const [q, setQ] = React.useState('');
+  const streams = React.useMemo(() => dbReady(db) ? sqlStreamCounts(db) : null, [db]);
+  if (!streams) return null;
+  const hue = THEME.sections.riv.hue;
+  const max = streams.named.length ? streams.named[0].n : 1;
+  const nq = q.trim().toLowerCase();
+  const matches = nq ? streams.named.filter((s) => s.name.toLowerCase().includes(nq)) : streams.named;
+  const toggle = (v) => {const s = new Set(selected);s.has(v) ? s.delete(v) : s.add(v);setSelected(s);};
+  const addAll = (names) => setSelected(new Set([...selected, ...names]));
+  const presets = [
+  ['Nooksack mainstem + forks', streams.named.filter((s) => /Nooksack River$/.test(s.name)).map((s) => s.name)],
+  ['10 with the most banks', streams.named.slice(0, 10).map((s) => s.name)]];
+
+  const Row = ({ v, label, n }) => {
+    const on = selected.has(v);
+    return (
+      React.createElement("button", { type: "button", role: "option", "aria-selected": on, className: `spk-row ${on ? 'on' : ''}`, onClick: () => toggle(v) },
+      React.createElement("i", { className: "box" }),
+      React.createElement("span", { className: "nm" }, label),
+      React.createElement("span", { className: "bar" }, React.createElement("i", { style: { width: `${Math.max(2, n / max * 100)}%` } })),
+      React.createElement("span", { className: "num n" }, n.toLocaleString())
+      ));
+
+  };
+  return (
+    React.createElement("div", { className: "spk", style: { '--c': hue } },
+    React.createElement("div", { className: "fl" },
+    React.createElement("span", null, "Stream name ", React.createElement("span", { style: { fontWeight: 400, color: THEME.muted } }, "(GNIS)")),
+    selected.size > 0 && React.createElement("button", { type: "button", onClick: () => setSelected(new Set()) }, "Clear")
+    ),
+    selected.size > 0 &&
+    React.createElement("div", { className: "chips", style: { marginBottom: 6 } },
+    [...selected].map((v) => React.createElement(Chip, { key: v, on: true, color: hue, onClear: () => toggle(v) }, gnLabel(v)))
+    ),
+
+    React.createElement("div", { className: "chips", style: { marginBottom: 6 } },
+    presets.map(([lbl, names]) => React.createElement(Chip, { key: lbl, off: true, color: hue, onClick: () => addAll(names) }, "+ ", lbl))
+    ),
+    React.createElement("input", { type: "search", value: q, onChange: (e) => setQ(e.target.value), "aria-label": "Find a named stream",
+      placeholder: `Find among ${streams.named.length} named streams` }),
+    nq && matches.length > 1 &&
+    React.createElement("button", { type: "button", className: "spk-all", onClick: () => addAll(matches.map((m) => m.name)) }, "Select all ",
+    matches.length, " matching “", q.trim(), "”"
+    ),
+
+    React.createElement("div", { className: "spk-list", role: "listbox", "aria-multiselectable": "true", "aria-label": "Named streams" },
+    !nq && React.createElement(Row, { v: GN_UNNAMED, label: React.createElement("em", null, "Unnamed reaches"), n: streams.unnamed }),
+    matches.map((s) => React.createElement(Row, { key: s.name, v: s.name, label: s.name, n: s.n })),
+    nq && !matches.length && React.createElement("div", { className: "spk-none" }, "No named stream matches “", q.trim(), "”")
+    ),
+    React.createElement("div", { style: { fontSize: 11, color: THEME.muted, marginTop: 4 } }, "Bars show banks per stream. Several streams share a name (e.g. Anderson Creek); pair with a Salmon Recovery Zone to narrow.")
+    ));
+
+}
+
+
+
+
+
+
 
 
 const SALMON_SPECIES = [
@@ -2481,6 +2589,13 @@ function buildBidQueryWhere(f) {
   addSet('mgr', f.selMgr, f._labels?.mgr || []);
   addSet('zon', f.selZon, f._labels?.zon || []);
   addSet('bfw', f.selBfw, f._labels?.bfw || []);
+  if (f.selGn && f.selGn.size) {
+    const named = [...f.selGn].filter((v) => v !== GN_UNNAMED);
+    const ors = [];
+    if (named.length) ors.push(`gn IN (${named.map(esc).join(',')})`);
+    if (f.selGn.has(GN_UNNAMED)) ors.push('gn IS NULL');
+    clauses.push('(' + ors.join(' OR ') + ')');
+  }
   addBoolSet('hmz', f.selHmz);
   addBoolSet('sal', f.selSal);
 
@@ -2549,6 +2664,75 @@ const SET_LABELS = {
 };
 const WT_LABELS_ALL = ['Active Channel', 'Tributary', 'Lake'];
 
+
+function sqlLabelSets(db) {
+  if (!dbReady(db)) return {};
+  const getDistinct = (col, where = "") => {
+    const filter = where ? ` AND ${where}` : "";
+    const r = db.exec(`SELECT DISTINCT ${col} FROM bids WHERE ${col} IS NOT NULL AND ${col} != ''${filter} ORDER BY ${col}`);
+    return r.length ? r[0].values.map((v) => String(v[0])) : [];
+  };
+  return {
+    tier: getDistinct('tier'), chk: getDistinct('chk'),
+    fish: getDistinct('fish'),
+    srz: getDistinct('srz'), mgr: getDistinct('mgr'),
+    zon: getDistinct('zon'), bfw: getDistinct('bfw'),
+    hmz: ['N', 'Y'], sal: ['N', 'Y'],
+    tcat: getDistinct('tic', 'ti=1'),
+    fcat: getDistinct('fic', 'fi=1'),
+    scat: getDistinct('sic', 'si=1'),
+    species: SALMON_SPECIES
+  };
+}
+
+
+
+
+const STATS_LINK_KEYS = ['srz', 'zoning', 'bfw', 'stream'];
+
+
+function parseStatsLink(hash) {
+  const parts = String(hash || '').replace(/^#/, '').split('/');
+  if (!STATS_LINK_KEYS.includes(parts[0])) return null;
+  const dec = (s) => {try {return decodeURIComponent(s);} catch (e) {return s;}};
+  const out = [];
+  for (let i = 0; i < parts.length;) {
+    let j = i + 1;
+    while (j < parts.length && !STATS_LINK_KEYS.includes(parts[j])) j++;
+    const v = dec(parts.slice(i + 1, j).join('/')).replace(/\s+/g, ' ').trim();
+    if (v) out.push([parts[i], v]);
+    i = j;
+  }
+  return out.length ? out : null;
+}
+
+function matchLabel(stored, q, display = (v) => v) {
+  const norm = (s) => String(s).toLowerCase().replace(/\s+/g, ' ').trim();
+  const n = norm(q);
+  return (stored || []).find((v) => norm(v) === n || norm(display(v)) === n) || null;
+}
+
+
+function statsLinkFilters(db, pairs) {
+  const labels = sqlLabelSets(db),f = defaultFilters(labels),miss = [];
+  const sets = { srz: ['selSrz', labels.srz, displaySrz], zoning: ['selZon', labels.zon], bfw: ['selBfw', labels.bfw] };
+  for (const [k, v] of pairs) {
+    if (k === 'stream') {
+      const q = "'" + v.replace(/'/g, "''") + "'";
+      let r = [];
+      try {r = db.exec(`SELECT gn FROM bids WHERE LOWER(gn) = LOWER(${q}) LIMIT 1`);}
+      catch (e) {console.warn('Summary Stats link: this database has no stream names (bids.gn)');}
+      if (r.length) f.selGn = new Set([...f.selGn, r[0].values[0][0]]);else miss.push(`${k}/${v}`);
+    } else {
+      const [key, stored, display] = sets[k];
+      const raw = matchLabel(stored, v, display);
+      if (raw) f[key] = new Set([raw]);else miss.push(`${k}/${v}`);
+    }
+  }
+  if (miss.length) console.warn(`Summary Stats link: no match for ${miss.join(', ')}`);
+  return f;
+}
+
 function defaultFilters(labelSets) {
   return {
     selTier: new Set(labelSets.tier), selChk: new Set(labelSets.chk), selFish: new Set(labelSets.fish),
@@ -2557,6 +2741,10 @@ function defaultFilters(labelSets) {
     selSpecies: new Set(labelSets.species), selTcat: new Set(labelSets.tcat),
     selFcat: new Set(labelSets.fcat), selScat: new Set(labelSets.scat), selWT: new Set(WT_LABELS_ALL),
     selBufZone: new Set([0, 1, 2, 3, 4]),
+
+
+
+    selGn: new Set(),
     ...Object.fromEntries(Object.entries(RANGE_DEFAULTS).map(([k, v]) => [k, [...v]])),
     _labels: labelSets
   };
@@ -2575,6 +2763,10 @@ function summarizeFilters(f, labelSets) {
     out.push({ key: k, label: `${SET_LABELS[k]}: ${s.size === 0 ? 'none' : vals.length > 3 ? `${vals.length} of ${all.length}` : vals.join(', ')}` });
   });
   if (f.selBufZone && f.selBufZone.size < 5) out.push({ key: 'selBufZone', label: `Buffer zones: ${f.selBufZone.size} of 5` });
+  if (f.selGn && f.selGn.size) {
+    const names = [...f.selGn].map(gnLabel);
+    out.push({ key: 'selGn', label: `Stream: ${names.length > 3 ? `${names.length} streams` : names.join(', ')}` });
+  }
   Object.entries(RANGE_DEFAULTS).forEach(([k, d]) => {
     const r = f[k];if (!r || r[0] === d[0] && r[1] === d[1]) return;
     out.push({ key: k, label: `${RANGE_LABELS[k]}: ${r[0]} – ${r[1]}` });
@@ -3170,25 +3362,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
   }
 
 
-  const labelSets = React.useMemo(() => {
-    if (!dbReady(db)) return {};
-    const getDistinct = (col, where = "") => {
-      const filter = where ? ` AND ${where}` : "";
-      const r = db.exec(`SELECT DISTINCT ${col} FROM bids WHERE ${col} IS NOT NULL AND ${col} != ''${filter} ORDER BY ${col}`);
-      return r.length ? r[0].values.map((v) => String(v[0])) : [];
-    };
-    return {
-      tier: getDistinct('tier'), chk: getDistinct('chk'),
-      fish: getDistinct('fish'),
-      srz: getDistinct('srz'), mgr: getDistinct('mgr'),
-      zon: getDistinct('zon'), bfw: getDistinct('bfw'),
-      hmz: ['N', 'Y'], sal: ['N', 'Y'],
-      tcat: getDistinct('tic', 'ti=1'),
-      fcat: getDistinct('fic', 'fi=1'),
-      scat: getDistinct('sic', 'si=1'),
-      species: SALMON_SPECIES
-    };
-  }, [db]);
+  const labelSets = React.useMemo(() => sqlLabelSets(db), [db]);
 
   const totalBidCount = React.useMemo(() => sqlBidCount(db), [db]);
 
@@ -3207,6 +3381,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
   const [selFcat, setSelFcat] = React.useState(null);
   const [selScat, setSelScat] = React.useState(null);
   const [selWT, setSelWT] = React.useState(null);
+  const [selGn, setSelGn] = React.useState(() => new Set());
   const WT_LABELS = ['Active Channel', 'Tributary', 'Lake'];
   const [selBufZone, setSelBufZone] = React.useState(() => new Set([0, 1, 2, 3, 4]));
   const bufZoneLabels = ['0\u201350 ft', '50\u2013100 ft', '100\u2013300 ft', 'HMZ', 'HMZ+300'];
@@ -3269,6 +3444,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
     setSelScat((prev) => prev || new Set(f ? f.selScat : labelSets.scat));
     setSelWT((prev) => prev || new Set(f ? f.selWT : WT_LABELS));
     if (f && f.selBufZone) setSelBufZone(new Set(f.selBufZone));
+    if (f && f.selGn) setSelGn(new Set(f.selGn));
 
 
 
@@ -3313,7 +3489,8 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
     if (!db || !f) return { rows: [], count: 0, mapPts: [] };
     try {
       const where = buildBidQueryWhere(f);
-      const sqlSort = sort === 'ci' ? 'ROUND(rpsf * rpsa / 100.0, 1)' : sort;
+
+      const sqlSort = sort === 'ci' ? 'ROUND(rpsf * rpsa / 100.0, 1)' : sort === 'gn' ? 'gn IS NULL ASC, gn' : sort;
       const dir = asc ? 'ASC' : 'DESC';
 
 
@@ -3335,7 +3512,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
           WHEN mc < 0.5 THEN 'Conifer Dom.'
           ELSE 'Strong Conifer' END`;
       const dr = db.exec(
-        `SELECT bid, str, ROUND(rpsf * rpsa / 100.0, 1) AS ci,
+        `SELECT bid, gn, ROUND(rpsf * rpsa / 100.0, 1) AS ci,
                   tier, srz, ${compDescSql} AS compDesc, mc, mh, pf, ps, ph, sols, slps, wet, mgr,
                   cx, cy, rpsf, rpsa,
                   chk, fish, bfw, hmz, zon, jur,
@@ -3385,14 +3562,14 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
     setEq(selSpecies, f.selSpecies) &&
     setEq(selTcat, f.selTcat) && setEq(selFcat, f.selFcat) && setEq(selScat, f.selScat) &&
     setEq(selWT, f.selWT) &&
-    setEq(selBufZone, f.selBufZone) &&
+    setEq(selBufZone, f.selBufZone) && setEq(selGn, f.selGn || new Set()) &&
     arrEq(rRPF, f.rRPF) && arrEq(rRPA, f.rRPA) && arrEq(rComp, f.rComp) &&
     arrEq(rCH, f.rCH) && arrEq(rSol, f.rSol) && arrEq(rSlp, f.rSlp) &&
     arrEq(rWet, f.rWet) && arrEq(rPF, f.rPF) && arrEq(rPS, f.rPS) &&
     arrEq(rPH, f.rPH) && arrEq(rRest, f.rRest) && arrEq(rCI, f.rCI));
 
   }, [appliedFilters, selTier, selChk, selFish, selSrz, selMgr, selZon, selBfw, selHmz,
-  selSal, selSpecies, selTcat, selFcat, selScat, selWT, selBufZone,
+  selSal, selSpecies, selTcat, selFcat, selScat, selWT, selBufZone, selGn,
   rRPF, rRPA, rComp, rCH, rSol, rSlp, rWet, rPF, rPS, rPH, rRest, rCI]);
 
 
@@ -3411,12 +3588,12 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
       impairment: cat(selTcat, labelSets.tcat) + cat(selFcat, labelSets.fcat) + cat(selScat, labelSets.scat),
       river: (selBufZone.size !== 5 ? 1 : 0) + cat(selHmz, labelSets.hmz) +
       cat(selBfw, labelSets.bfw) + cat(selSrz, labelSets.srz) +
-      catLen(selWT, 3),
+      catLen(selWT, 3) + (selGn.size ? 1 : 0),
       admin: cat(selMgr, labelSets.mgr) + cat(selZon, labelSets.zon),
       modifiers: rng(rSol, 0, 12) + rng(rSlp, 0, 5) + rng(rWet, 0, 5)
     };
   }, [labelSets, selTier, selChk, selFish, selSal, selSpecies, selTcat, selFcat, selScat,
-  selHmz, selBfw, selSrz, selMgr, selZon, selBufZone, selWT,
+  selHmz, selBfw, selSrz, selMgr, selZon, selBufZone, selWT, selGn,
   rRPF, rRPA, rComp, rCH, rSol, rSlp, rWet, rPF, rPS, rPH, rRest, rCI]);
 
 
@@ -3432,6 +3609,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
       selWT: new Set(selWT),
 
       selBufZone: new Set(selBufZone),
+      selGn: new Set(selGn),
       rRPF: [...rRPF], rRPA: [...rRPA], rComp: [...rComp], rCH: [...rCH],
       rSol: [...rSol], rSlp: [...rSlp], rWet: [...rWet],
       rPF: [...rPF], rPS: [...rPS], rPH: [...rPH], rRest: [...rRest], rCI: [...rCI],
@@ -3464,6 +3642,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
 
 
       setSelBufZone(new Set([0, 1, 2, 3, 4]));
+      setSelGn(new Set());
     }
     setRRPF([0, 100]);setRRPA([0, 100]);setRComp([-1, 1]);setRCH([0, 300]);
     setRSol([0, 12]);setRSlp([0, 5]);setRWet([0, 5]);
@@ -3478,6 +3657,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
     const setters = { selTier: setSelTier, selChk: setSelChk, selFish: setSelFish, selSrz: setSelSrz, selMgr: setSelMgr,
       selZon: setSelZon, selBfw: setSelBfw, selHmz: setSelHmz, selSal: setSelSal, selSpecies: setSelSpecies,
       selTcat: setSelTcat, selFcat: setSelFcat, selScat: setSelScat, selWT: setSelWT, selBufZone: setSelBufZone,
+      selGn: setSelGn,
       rRPF: setRRPF, rRPA: setRRPA, rComp: setRComp, rCH: setRCH, rSol: setRSol, rSlp: setRSlp, rWet: setRWet,
       rPF: setRPF, rPS: setRPS, rPH: setRPH, rRest: setRRest, rCI: setRCI };
     if (setters[key]) setters[key](d[key]);
@@ -3487,7 +3667,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
 
   const COLUMNS = [
   { key: 'bid', label: 'BID', w: 80, num: true, fmt: (v) => v },
-  { key: 'str', label: 'Stream', w: 100, fmt: (v) => v || '\u2014' },
+  { key: 'gn', label: 'Stream', w: 130, fmt: (v) => v || React.createElement("span", { style: { color: THEME.muted, fontStyle: 'italic' } }, "Unnamed") },
 
   { key: 'rpsf', label: 'Restoration Priority', stack: ['Restoration', 'Priority'], term: 'rp', w: 74, num: true, fmt: (v) => v?.toFixed(1) },
   { key: 'rpsa', label: 'Area percentile', stack: ['Area', 'percentile'], term: 'percentile', w: 68, num: true, fmt: (v) => v?.toFixed(1) },
@@ -3505,7 +3685,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
 
   const handleSort = (col) => {
     if (sortCol === col) setSortAsc(!sortAsc);else
-    {setSortCol(col);setSortAsc(col === 'bid' || col === 'str' || col === 'srz' || col === 'mgr');}
+    {setSortCol(col);setSortAsc(col === 'bid' || col === 'gn' || col === 'srz' || col === 'mgr');}
   };
 
 
@@ -3574,7 +3754,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
   const exportCSV = () => {
     const cols = [
     { key: 'bid', hdr: 'BID' },
-    { key: 'str', hdr: 'Stream' },
+    { key: 'gn', hdr: 'GNIS_Name' },
     { key: 'rpsf', hdr: 'RP_Final' },
     { key: 'rpsa', hdr: 'Area_RP_Pctile' },
     { key: 'ci', hdr: 'Composite_Index' },
@@ -3669,6 +3849,7 @@ function BIDQueryPanel({ data, sharedBidData, appliedFilters, setAppliedFilters 
     ),
 
     React.createElement(CollapsibleSection, { title: "River Context", defaultOpen: false, badge: bidBadges.river, hue: THEME.sections.riv.hue },
+    React.createElement(StreamPicker, { db: db, selected: selGn, setSelected: setSelGn }),
     React.createElement("div", { className: "fl" }, React.createElement("span", null, React.createElement(Term, { id: "zones" }, "Buffer zones"), " ", React.createElement("span", { style: { fontWeight: 400, color: THEME.muted } }, "(zone charts only)"))),
     React.createElement("div", { className: "chips" },
     bufZoneLabels.map((lbl, i) => {
@@ -4244,10 +4425,14 @@ function App() {
 
   const [appliedFilters, setAppliedFilters] = React.useState(null);
 
+
   const initHash = window.location.hash;
   const hashBidMatch = initHash.match(/^#bid\/(.+)/);
-  const [activeTab, setActiveTab] = React.useState(hashBidMatch ? 'bank_explorer' : 'bid_query');
+  const initLink = parseStatsLink(initHash);
+  const [activeTab, setActiveTab] = React.useState(
+    hashBidMatch ? 'bank_explorer' : initLink ? 'summary_stats' : 'bid_query');
   const [pendingBID, setPendingBID] = React.useState(hashBidMatch ? hashBidMatch[1] : null);
+  const [pendingLink, setPendingLink] = React.useState(initLink);
 
 
   const updateHash = React.useCallback((tab, bid) => {
@@ -4266,10 +4451,21 @@ function App() {
         setActiveTab('bank_explorer');
         setPendingBID(m[1]);
       }
+      const link = parseStatsLink(window.location.hash);
+      if (link) setPendingLink(link);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+
+
+
+  React.useEffect(() => {
+    if (!pendingLink || !dbReady(sharedBidData?.db)) return;
+    setAppliedFilters(statsLinkFilters(sharedBidData.db, pendingLink));
+    setActiveTab('summary_stats');
+    setPendingLink(null);
+  }, [pendingLink, sharedBidData]);
 
   React.useEffect(() => {
     let cancelled = false;

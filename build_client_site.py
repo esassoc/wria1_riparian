@@ -87,6 +87,13 @@ LC_INDEX = {lc: i for i, lc in enumerate(LC_ORDER)}
 # CLIENT_DASHBOARD_NOTES.md for the full story.
 FISH_OVERRIDE_CSV = os.path.join(SCRIPT_DIR, "data_overrides", "fish_access_override.csv")
 
+# gnis_names.csv -- source of the bids.gn column: the 3DHP GNIS stream name per bank
+# (blank on unnamed reaches). The upstream JSON carries no stream name (its `str` is the
+# 3DHP feature type). Generated from the GIS feature layer (TP_Split_JOIN_20260507.csv) by
+# tools/make_gnis_names.py, a one-off script like make_fish_override.py, so the 40 MB
+# export stays out of the build.
+GNIS_CSV = os.path.join(SCRIPT_DIR, "data_overrides", "gnis_names.csv")
+
 # aspect_override.csv -- Fix 3: bid_explorer_data.json's asp/af come from AspectMEANBID,
 # an ArcGIS Zonal Statistics MEAN over aspect1.tif. That value carries two independent
 # errors: aspect is circular, so a linear mean of degrees collapses toward 180 (south),
@@ -393,6 +400,30 @@ def load_s_track_scores(csv_path):
     return scores
 
 
+def load_gnis_names(csv_path, bids):
+    """BID -> GNIS stream name (None when unnamed), from data_overrides/gnis_names.csv.
+
+    Fails if the file is missing, if any bank in the bids table is missing from it, or if a
+    bank carries two different names, rather than shipping a stream filter that silently
+    drops banks.
+    """
+    if not os.path.isfile(csv_path):
+        raise RuntimeError(f"GNIS names not found: {csv_path}. Generate it with "
+                           "python tools/make_gnis_names.py")
+    names, seen = {}, set()
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(line for line in f if not line.startswith("#")):
+            bid, name = row["bid"], (row["gnis_name"] or "").strip() or None
+            if bid in seen and names.get(bid) != name:
+                raise RuntimeError(f"GNIS names: {bid} carries two names in {csv_path}")
+            seen.add(bid)
+            names[bid] = name
+    missing = [b for b in bids if b not in seen]
+    if missing:
+        raise RuntimeError(f"GNIS names: {len(missing)} BID(s) not in {csv_path} (e.g. {missing[:5]})")
+    return names
+
+
 def apply_reach_override(bid_rows, attr_keys, csv_path):
     """Fix 4: set rid / str / wt to the bank's own reach for the banks listed in
     reach_attr_override.csv. Mutates bid_rows in place and returns a summary line.
@@ -626,7 +657,8 @@ def build_sqlite(bid_json_path, sqlite_path, main_json_path):
             cx REAL, cy REAL, pf REAL, ps REAL, ph REAL,
             mc REAL, mh REAL, rpsf REAL, rpsa REAL,
             sqft REAL,
-            rpsn REAL, sols REAL, slps REAL
+            rpsn REAL, sols REAL, slps REAL,
+            gn TEXT
         )
     """)
     # One zone table. lc0..lc8 are landcover PROPORTIONS (area = lcN * sqft). Zones 0-4 are
@@ -677,10 +709,11 @@ def build_sqlite(bid_json_path, sqlite_path, main_json_path):
         'mc', 'mh',
     ]
     bool_keys = {'hmz', 'ti', 'fi', 'si', 'ai', 'sal'}
-    # +1 bid, +1 sqft, +5 rpsn/sols/slps/rpsf/rpsa (all from SCORES_CSV, one source)
-    placeholders = ",".join(["?"] * (7 + len(attr_keys)))
+    # +1 bid, +1 sqft, +5 rpsn/sols/slps/rpsf/rpsa (all from SCORES_CSV, one source), +1 gn
+    placeholders = ",".join(["?"] * (8 + len(attr_keys)))
 
     s_track = load_s_track_scores(SCORES_CSV)
+    gnis = load_gnis_names(GNIS_CSV, d["bids"])
     aspect_override = load_aspect_override(ASPECT_OVERRIDE_CSV)
     if aspect_override:
         missing_asp = [bid for bid in d["bids"] if bid not in aspect_override]
@@ -823,6 +856,7 @@ def build_sqlite(bid_json_path, sqlite_path, main_json_path):
         vals.append(rpsa)
         vals.append(total_sqft)
         vals.extend([rpsn, round(sols, 3), round(slps, 3)])
+        vals.append(gnis[bid])
         bid_rows.append(vals)
 
     # Fix 1: GIS-authoritative fish-access override + tier recompute (includes

@@ -7,6 +7,9 @@
   <!--
     WRIA 1 Riparian Restoration Prioritization
     Deep link to a single bank: append #bid/<BID_ID> to this page's URL.
+    Deep link to Summary Stats with a filter applied: append #srz/<zone>, #zoning/<group>,
+    #bfw/<size class> or #stream/<GNIS name> (values URL-encoded). Pairs chain:
+    #stream/Anderson%20Creek/srz/Lower%20Mainstem%20Nooksack.
   -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -188,6 +191,22 @@
     .applied .lab{font-size:11px;color:var(--muted);margin-right:2px}
     .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
     .chips{display:flex;flex-wrap:wrap;gap:5px}
+    /* StreamPicker */
+    .spk input[type="search"]{width:100%;font:13px var(--font-b);padding:6px 9px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink)}
+    .spk-all{appearance:none;border:0;background:none;font:500 11.5px var(--font-b);color:var(--accent-ink);cursor:pointer;padding:5px 0 0}
+    .spk-list{margin-top:6px;max-height:208px;overflow-y:auto;border:1px solid var(--line-2);border-radius:5px}
+    .spk-row{appearance:none;border:0;border-bottom:1px solid var(--line-2);background:none;width:100%;display:grid;grid-template-columns:14px minmax(0,1fr) 64px 38px;gap:8px;align-items:center;padding:5px 8px;font:12.5px var(--font-b);color:var(--ink);text-align:left;cursor:pointer}
+    .spk-row:last-child{border-bottom:0}
+    .spk-row:hover{background:var(--surface-2)}
+    .spk-row .box{width:12px;height:12px;border:1.5px solid var(--faint);border-radius:3px}
+    .spk-row.on{background:color-mix(in srgb,var(--c) 9%,transparent)}
+    .spk-row.on .box{background:var(--c);border-color:var(--c);box-shadow:inset 0 0 0 2px var(--surface)}
+    .spk-row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .spk-row .bar{height:5px;background:var(--line-2);border-radius:3px;overflow:hidden}
+    .spk-row .bar i{display:block;height:100%;background:var(--c);opacity:.55;border-radius:3px}
+    .spk-row.on .bar i{opacity:1}
+    .spk-row .n{font-size:11px;color:var(--muted);text-align:right}
+    .spk-none{padding:10px;font-size:12px;color:var(--muted);text-align:center}
     .be{display:grid;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:18px} /* minmax(0,1fr), NOT a bare 1fr: a bare fr track will not shrink below its content's
        min-content width. The zone grid inside is ~772px intrinsic, so a bare 1fr pushed the
        whole page to 822px at a 768px viewport. Same defect that was fixed on .bq in Task 6. */
@@ -381,6 +400,10 @@
       'Lower SF Nooksack': 'Lower South Fork Nooksack', 'Upper SF Nooksack': 'Upper South Fork Nooksack',
     };
     const displaySrz = v => SRZ_DISPLAY[v] || v || 'Unknown';
+    // GNIS stream name. Unnamed reaches are NULL in bids.gn; in the stream filter they are
+    // picked with this token (never a real GNIS name).
+    const GN_UNNAMED = '__unnamed__';
+    const gnLabel = v => (v == null || v === GN_UNNAMED) ? 'Unnamed reach' : v;
     // Reverse of SRZ_DISPLAY, so charts that already renamed a row's key for display
     // (srzDisp) can still look up the raw key's canonical colour in SR_ZONE_COLORS.
     const SRZ_RAW = Object.fromEntries(Object.entries(SRZ_DISPLAY).map(([raw, disp]) => [disp, raw]));
@@ -1572,15 +1595,27 @@
         const like = esc(term + '%');
         const contains = esc('%' + term + '%');
         const r = db.exec(
-          `SELECT bid, str, srz, rpsf, tier FROM bids
-           WHERE bid LIKE ${like} OR str LIKE ${like} OR srz LIKE ${like}
-              OR bid LIKE ${contains} OR str LIKE ${contains} OR srz LIKE ${contains}
-           ORDER BY CASE WHEN bid LIKE ${like} OR str LIKE ${like} OR srz LIKE ${like} THEN 0 ELSE 1 END, bid
+          `SELECT bid, gn, srz, rpsf, tier FROM bids
+           WHERE bid LIKE ${like} OR gn LIKE ${like} OR srz LIKE ${like}
+              OR bid LIKE ${contains} OR gn LIKE ${contains} OR srz LIKE ${contains}
+           ORDER BY CASE WHEN bid LIKE ${like} OR gn LIKE ${like} OR srz LIKE ${like} THEN 0 ELSE 1 END, bid
            LIMIT 50`
         );
         if (!r.length) return [];
-        return r[0].values.map(([bid, str, srz, rpsf, tier]) => ({ bid, str, srz, rpsf, tier }));
+        return r[0].values.map(([bid, gn, srz, rpsf, tier]) => ({ bid, gn, srz, rpsf, tier }));
       } catch (e) { console.error('sqlSearchBids error:', e); return []; }
+    }
+    // Named streams with bank counts (most banks first) and the unnamed-reach count, for the
+    // StreamPicker. null when the database predates the gn column.
+    function sqlStreamCounts(db) {
+      try {
+        const r = db.exec(`SELECT gn, COUNT(*) FROM bids GROUP BY gn ORDER BY COUNT(*) DESC, gn`);
+        if (!r.length) return null;
+        const named = [];
+        let unnamed = 0;
+        r[0].values.forEach(([name, n]) => { if (name == null) unnamed = n; else named.push({ name, n }); });
+        return { named, unnamed };
+      } catch (e) { return null; }
     }
     // A truthy `db` is not necessarily a usable one: sharedBidData can be populated a tick
     // before sql.js finishes initialising, so every guard must test for the method it is
@@ -1745,7 +1780,7 @@
                   <button key={a.bid} type="button" onClick={() => { selectBID(a.bid); setSearchTerm(a.bid); setShowDropdown(false); }}
                     style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 13, background: 'none', border: 0, borderBottom: `1px solid ${THEME.line2}`, cursor: 'pointer', display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span className="num" style={{ fontWeight: 500, color: THEME.accentInk }}>{a.bid}</span>
-                    <span style={{ color: THEME.ink2 }}>{a.str || 'Unknown'}</span>
+                    <span style={{ color: a.gn ? THEME.ink2 : THEME.muted }}>{gnLabel(a.gn)}</span>
                     <span style={{ color: THEME.muted, fontSize: 12 }}>{displaySrz(a.srz)}</span>
                     <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span className="num" style={{ fontSize: 12, color: THEME.ink2 }}>{a.rpsf}</span><TierPill tier={a.tier} />
@@ -1769,7 +1804,7 @@
               {/* BID Header */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
                 <span className="num" style={{ font: '600 22px var(--font-h)', color: THEME.ink }}>{selectedBID}</span>
-                <span style={{ color: THEME.muted }}>{attr.str || 'Unknown stream'}</span>
+                <span style={{ color: attr.gn ? THEME.ink2 : THEME.muted, fontWeight: attr.gn ? 500 : 400 }}>{gnLabel(attr.gn)}</span>
                 <TierPill tier={attr.tier} />
                 <Chip dot color={colorOf('srz', attr.srz)}>{displaySrz(attr.srz)}</Chip>
                 {attr.chk === 'Y' && <Chip dot color={THEME.sections.fish.hue}>Early Chinook</Chip>}
@@ -2028,7 +2063,19 @@
                 <div className="card">
                   <div className="card-h"><h3>Location</h3></div>
                   <div className="card-b" style={{ display: 'grid', gap: 8 }}>
-                    <div><span style={{ fontSize: 11, color: THEME.muted }}>Stream</span><div className="font-medium">{attr.str || '-'}</div></div>
+                    {/* GNIS stream name leads the card; the feature type is secondary. */}
+                    <div style={{ borderLeft: `3px solid ${THEME.sections.riv.hue}`, paddingLeft: 10, marginBottom: 2 }}>
+                      <span style={{ fontSize: 11, color: THEME.muted }}>Stream</span>
+                      <div style={{ font: `600 19px/1.2 var(--font-h)`, color: attr.gn ? THEME.ink : THEME.muted, fontStyle: attr.gn ? 'normal' : 'italic' }}>{gnLabel(attr.gn)}</div>
+                      <div style={{ fontSize: 11.5, color: THEME.muted, marginTop: 2 }}>
+                        {attr.str || 'Unknown feature type'}{attr.rid ? <> · reach <span className="num">{attr.rid}</span></> : null}
+                      </div>
+                      {attr.gn && (
+                        <a href={`#stream/${encodeURIComponent(attr.gn)}`} style={{ fontSize: 12, color: THEME.accentInk, display: 'inline-block', marginTop: 4 }}>
+                          Summary stats for {attr.gn} ›
+                        </a>
+                      )}
+                    </div>
                     <div><span style={{ fontSize: 11, color: THEME.muted }}>Salmon Recovery Zone</span>
                       <div><Chip dot color={colorOf('srz', attr.srz)}>{displaySrz(attr.srz)}</Chip></div>
                     </div>
@@ -2461,6 +2508,67 @@
       );
     }
 
+    // GNIS stream-name picker for BID Query's River Context section. Nearly 200 names are too
+    // many for a chip group, so: a type-to-narrow list with each stream's bank count drawn as
+    // a bar, "select every match" for the typed text (e.g. "Fork" -> all three forks), two
+    // presets, and the picks shown as removable chips. Empty selection = no stream filter.
+    // Top-level (not nested in BIDQueryPanel) so the search box keeps focus across renders.
+    function StreamPicker({ db, selected, setSelected }) {
+      const [q, setQ] = React.useState('');
+      const streams = React.useMemo(() => dbReady(db) ? sqlStreamCounts(db) : null, [db]);
+      if (!streams) return null;
+      const hue = THEME.sections.riv.hue;
+      const max = streams.named.length ? streams.named[0].n : 1;
+      const nq = q.trim().toLowerCase();
+      const matches = nq ? streams.named.filter(s => s.name.toLowerCase().includes(nq)) : streams.named;
+      const toggle = v => { const s = new Set(selected); s.has(v) ? s.delete(v) : s.add(v); setSelected(s); };
+      const addAll = names => setSelected(new Set([...selected, ...names]));
+      const presets = [
+        ['Nooksack mainstem + forks', streams.named.filter(s => /Nooksack River$/.test(s.name)).map(s => s.name)],
+        ['10 with the most banks', streams.named.slice(0, 10).map(s => s.name)],
+      ];
+      const Row = ({ v, label, n }) => {
+        const on = selected.has(v);
+        return (
+          <button type="button" role="option" aria-selected={on} className={`spk-row ${on ? 'on' : ''}`} onClick={() => toggle(v)}>
+            <i className="box" />
+            <span className="nm">{label}</span>
+            <span className="bar"><i style={{ width: `${Math.max(2, n / max * 100)}%` }} /></span>
+            <span className="num n">{n.toLocaleString()}</span>
+          </button>
+        );
+      };
+      return (
+        <div className="spk" style={{ '--c': hue }}>
+          <div className="fl">
+            <span>Stream name <span style={{ fontWeight: 400, color: THEME.muted }}>(GNIS)</span></span>
+            {selected.size > 0 && <button type="button" onClick={() => setSelected(new Set())}>Clear</button>}
+          </div>
+          {selected.size > 0 && (
+            <div className="chips" style={{ marginBottom: 6 }}>
+              {[...selected].map(v => <Chip key={v} on color={hue} onClear={() => toggle(v)}>{gnLabel(v)}</Chip>)}
+            </div>
+          )}
+          <div className="chips" style={{ marginBottom: 6 }}>
+            {presets.map(([lbl, names]) => <Chip key={lbl} off color={hue} onClick={() => addAll(names)}>+ {lbl}</Chip>)}
+          </div>
+          <input type="search" value={q} onChange={e => setQ(e.target.value)} aria-label="Find a named stream"
+            placeholder={`Find among ${streams.named.length} named streams`} />
+          {nq && matches.length > 1 && (
+            <button type="button" className="spk-all" onClick={() => addAll(matches.map(m => m.name))}>
+              Select all {matches.length} matching &ldquo;{q.trim()}&rdquo;
+            </button>
+          )}
+          <div className="spk-list" role="listbox" aria-multiselectable="true" aria-label="Named streams">
+            {!nq && <Row v={GN_UNNAMED} label={<em>Unnamed reaches</em>} n={streams.unnamed} />}
+            {matches.map(s => <Row key={s.name} v={s.name} label={s.name} n={s.n} />)}
+            {nq && !matches.length && <div className="spk-none">No named stream matches &ldquo;{q.trim()}&rdquo;</div>}
+          </div>
+          <div style={{ fontSize: 11, color: THEME.muted, marginTop: 4 }}>Bars show banks per stream. Several streams share a name (e.g. Anderson Creek); pair with a Salmon Recovery Zone to narrow.</div>
+        </div>
+      );
+    }
+
     // --- SQL helper: build WHERE clause from BID Query filters ---
     // Note: sql.js db.exec() uses named params or no params. We inline values safely
     // since all values come from our own controlled UI state (no user-typed SQL).
@@ -2499,6 +2607,13 @@
       addSet('mgr', f.selMgr, f._labels?.mgr || []);
       addSet('zon', f.selZon, f._labels?.zon || []);
       addSet('bfw', f.selBfw, f._labels?.bfw || []);
+      if (f.selGn && f.selGn.size) {
+        const named = [...f.selGn].filter(v => v !== GN_UNNAMED);
+        const ors = [];
+        if (named.length) ors.push(`gn IN (${named.map(esc).join(',')})`);
+        if (f.selGn.has(GN_UNNAMED)) ors.push('gn IS NULL');
+        clauses.push('(' + ors.join(' OR ') + ')');
+      }
       addBoolSet('hmz', f.selHmz);
       addBoolSet('sal', f.selSal);
       // Salmon species multi-select: if a strict subset is selected, filter to BIDs whose
@@ -2566,6 +2681,75 @@
       selScat: 'Sediment category', selWT: 'Waterbody',
     };
     const WT_LABELS_ALL = ['Active Channel', 'Tributary', 'Lake'];
+    // Every filter's full label set, from DISTINCT queries. Shared by the BID Query panel and
+    // the #srz/ deep link, which has to build an applied filter before that panel ever mounts.
+    function sqlLabelSets(db) {
+      if (!dbReady(db)) return {};
+      const getDistinct = (col, where = "") => {
+        const filter = where ? ` AND ${where}` : "";
+        const r = db.exec(`SELECT DISTINCT ${col} FROM bids WHERE ${col} IS NOT NULL AND ${col} != ''${filter} ORDER BY ${col}`);
+        return r.length ? r[0].values.map(v => String(v[0])) : [];
+      };
+      return {
+        tier: getDistinct('tier'), chk: getDistinct('chk'),
+        fish: getDistinct('fish'),
+        srz: getDistinct('srz'), mgr: getDistinct('mgr'),
+        zon: getDistinct('zon'), bfw: getDistinct('bfw'),
+        hmz: ['N', 'Y'], sal: ['N', 'Y'],
+        tcat: getDistinct('tic', 'ti=1'),
+        fcat: getDistinct('fic', 'fi=1'),
+        scat: getDistinct('sic', 'si=1'),
+        species: SALMON_SPECIES,
+      };
+    }
+    // --- Summary Stats deep links ---
+    // #srz/<zone>, #zoning/<group>, #bfw/<size class>, #stream/<GNIS name>, alone or chained
+    // (#stream/Anderson%20Creek/srz/Lower%20Mainstem%20Nooksack). Each opens Summary Stats
+    // with that BID Query filter applied. Values are matched ignoring case and spacing.
+    const STATS_LINK_KEYS = ['srz', 'zoning', 'bfw', 'stream'];
+    // -> [[key, value], ...] or null. A value runs until the next known key, so a zone
+    // written with a bare slash ("Frontal/Coastal multiple") still parses.
+    function parseStatsLink(hash) {
+      const parts = String(hash || '').replace(/^#/, '').split('/');
+      if (!STATS_LINK_KEYS.includes(parts[0])) return null;
+      const dec = s => { try { return decodeURIComponent(s); } catch (e) { return s; } };
+      const out = [];
+      for (let i = 0; i < parts.length;) {
+        let j = i + 1;
+        while (j < parts.length && !STATS_LINK_KEYS.includes(parts[j])) j++;
+        const v = dec(parts.slice(i + 1, j).join('/')).replace(/\s+/g, ' ').trim();
+        if (v) out.push([parts[i], v]);
+        i = j;
+      }
+      return out.length ? out : null;
+    }
+    // Stored label matching a link value; also tries the display form (SRZ abbreviations).
+    function matchLabel(stored, q, display = v => v) {
+      const norm = s => String(s).toLowerCase().replace(/\s+/g, ' ').trim();
+      const n = norm(q);
+      return (stored || []).find(v => norm(v) === n || norm(display(v)) === n) || null;
+    }
+    // The applied-filter object for a parsed link. Unrecognised values are skipped (and
+    // logged), so a bad link opens Summary Stats with whatever else it named, or unfiltered.
+    function statsLinkFilters(db, pairs) {
+      const labels = sqlLabelSets(db), f = defaultFilters(labels), miss = [];
+      const sets = { srz: ['selSrz', labels.srz, displaySrz], zoning: ['selZon', labels.zon], bfw: ['selBfw', labels.bfw] };
+      for (const [k, v] of pairs) {
+        if (k === 'stream') {
+          const q = "'" + v.replace(/'/g, "''") + "'";
+          let r = [];
+          try { r = db.exec(`SELECT gn FROM bids WHERE LOWER(gn) = LOWER(${q}) LIMIT 1`); }
+          catch (e) { console.warn('Summary Stats link: this database has no stream names (bids.gn)'); }
+          if (r.length) f.selGn = new Set([...f.selGn, r[0].values[0][0]]); else miss.push(`${k}/${v}`);
+        } else {
+          const [key, stored, display] = sets[k];
+          const raw = matchLabel(stored, v, display);
+          if (raw) f[key] = new Set([raw]); else miss.push(`${k}/${v}`);
+        }
+      }
+      if (miss.length) console.warn(`Summary Stats link: no match for ${miss.join(', ')}`);
+      return f;
+    }
     // The all-selected, full-range filter state. The only place it is spelled out.
     function defaultFilters(labelSets) {
       return {
@@ -2575,6 +2759,10 @@
         selSpecies: new Set(labelSets.species), selTcat: new Set(labelSets.tcat),
         selFcat: new Set(labelSets.fcat), selScat: new Set(labelSets.scat), selWT: new Set(WT_LABELS_ALL),
         selBufZone: new Set([0, 1, 2, 3, 4]),
+        // GNIS stream names (StreamPicker, or a #stream/ link). Unlike the chip sets, EMPTY means
+        // no filter: 197 names are picked a few at a time, not unticked from all. GN_UNNAMED
+        // stands for the unnamed reaches.
+        selGn: new Set(),
         ...Object.fromEntries(Object.entries(RANGE_DEFAULTS).map(([k, v]) => [k, [...v]])),
         _labels: labelSets,
       };
@@ -2593,6 +2781,10 @@
         out.push({ key: k, label: `${SET_LABELS[k]}: ${s.size === 0 ? 'none' : vals.length > 3 ? `${vals.length} of ${all.length}` : vals.join(', ')}` });
       });
       if (f.selBufZone && f.selBufZone.size < 5) out.push({ key: 'selBufZone', label: `Buffer zones: ${f.selBufZone.size} of 5` });
+      if (f.selGn && f.selGn.size) {
+        const names = [...f.selGn].map(gnLabel);
+        out.push({ key: 'selGn', label: `Stream: ${names.length > 3 ? `${names.length} streams` : names.join(', ')}` });
+      }
       Object.entries(RANGE_DEFAULTS).forEach(([k, d]) => {
         const r = f[k]; if (!r || (r[0] === d[0] && r[1] === d[1])) return;
         out.push({ key: k, label: `${RANGE_LABELS[k]}: ${r[0]} – ${r[1]}` });
@@ -3188,25 +3380,7 @@
       }
 
       // --- SQL-backed label sets (DISTINCT queries, run once) ---
-      const labelSets = React.useMemo(() => {
-        if (!dbReady(db)) return {};
-        const getDistinct = (col, where = "") => {
-          const filter = where ? ` AND ${where}` : "";
-          const r = db.exec(`SELECT DISTINCT ${col} FROM bids WHERE ${col} IS NOT NULL AND ${col} != ''${filter} ORDER BY ${col}`);
-          return r.length ? r[0].values.map(v => String(v[0])) : [];
-        };
-        return {
-          tier: getDistinct('tier'), chk: getDistinct('chk'),
-          fish: getDistinct('fish'),
-          srz: getDistinct('srz'), mgr: getDistinct('mgr'),
-          zon: getDistinct('zon'), bfw: getDistinct('bfw'),
-          hmz: ['N', 'Y'], sal: ['N', 'Y'],
-          tcat: getDistinct('tic', 'ti=1'),
-          fcat: getDistinct('fic', 'fi=1'),
-          scat: getDistinct('sic', 'si=1'),
-          species: SALMON_SPECIES,
-        };
-      }, [db]);
+      const labelSets = React.useMemo(() => sqlLabelSets(db), [db]);
 
       const totalBidCount = React.useMemo(() => sqlBidCount(db), [db]);
 
@@ -3225,6 +3399,7 @@
       const [selFcat, setSelFcat] = React.useState(null);  // Fecal impairment cat
       const [selScat, setSelScat] = React.useState(null);  // Sediment impairment cat
       const [selWT, setSelWT] = React.useState(null);      // Waterbody type (Active Channel / Trib / Lake)
+      const [selGn, setSelGn] = React.useState(() => new Set());  // GNIS stream names; empty = all
       const WT_LABELS = ['Active Channel', 'Tributary', 'Lake'];
       const [selBufZone, setSelBufZone] = React.useState(() => new Set([0, 1, 2, 3, 4]));
       const bufZoneLabels = ['0\u201350 ft', '50\u2013100 ft', '100\u2013300 ft', 'HMZ', 'HMZ+300'];
@@ -3287,6 +3462,7 @@
         setSelScat(prev => prev || new Set(f ? f.selScat : labelSets.scat));
         setSelWT(prev => prev || new Set(f ? f.selWT : WT_LABELS));
         if (f && f.selBufZone) setSelBufZone(new Set(f.selBufZone));
+        if (f && f.selGn) setSelGn(new Set(f.selGn));
         // NOTE the deliberate asymmetry with the sel* setters above. Those use
         // a `prev || ...` guard because they initialise to null. The ranges
         // initialise to real arrays like [0, 100], which are always truthy, so
@@ -3331,7 +3507,8 @@
         if (!db || !f) return { rows: [], count: 0, mapPts: [] };
         try {
         const where = buildBidQueryWhere(f);
-        const sqlSort = sort === 'ci' ? 'ROUND(rpsf * rpsa / 100.0, 1)' : sort;
+        // Unnamed reaches (gn NULL) sort after every named stream in either direction.
+        const sqlSort = sort === 'ci' ? 'ROUND(rpsf * rpsa / 100.0, 1)' : sort === 'gn' ? 'gn IS NULL ASC, gn' : sort;
         const dir = asc ? 'ASC' : 'DESC';
 
         // Count
@@ -3353,7 +3530,7 @@
           WHEN mc < 0.5 THEN 'Conifer Dom.'
           ELSE 'Strong Conifer' END`;
         const dr = db.exec(
-          `SELECT bid, str, ROUND(rpsf * rpsa / 100.0, 1) AS ci,
+          `SELECT bid, gn, ROUND(rpsf * rpsa / 100.0, 1) AS ci,
                   tier, srz, ${compDescSql} AS compDesc, mc, mh, pf, ps, ph, sols, slps, wet, mgr,
                   cx, cy, rpsf, rpsa,
                   chk, fish, bfw, hmz, zon, jur,
@@ -3403,14 +3580,14 @@
           setEq(selSpecies, f.selSpecies) &&
           setEq(selTcat, f.selTcat) && setEq(selFcat, f.selFcat) && setEq(selScat, f.selScat) &&
           setEq(selWT, f.selWT) &&
-          setEq(selBufZone, f.selBufZone) &&
+          setEq(selBufZone, f.selBufZone) && setEq(selGn, f.selGn || new Set()) &&
           arrEq(rRPF, f.rRPF) && arrEq(rRPA, f.rRPA) && arrEq(rComp, f.rComp) &&
           arrEq(rCH, f.rCH) && arrEq(rSol, f.rSol) && arrEq(rSlp, f.rSlp) &&
           arrEq(rWet, f.rWet) && arrEq(rPF, f.rPF) && arrEq(rPS, f.rPS) &&
           arrEq(rPH, f.rPH) && arrEq(rRest, f.rRest) && arrEq(rCI, f.rCI)
         );
       }, [appliedFilters, selTier, selChk, selFish, selSrz, selMgr, selZon, selBfw, selHmz,
-          selSal, selSpecies, selTcat, selFcat, selScat, selWT, selBufZone,
+          selSal, selSpecies, selTcat, selFcat, selScat, selWT, selBufZone, selGn,
           rRPF, rRPA, rComp, rCH, rSol, rSlp, rWet, rPF, rPS, rPH, rRest, rCI]);
 
       // --- Per-section active filter badge counts (renders as a number on the section header) ---
@@ -3429,12 +3606,12 @@
           impairment: cat(selTcat, labelSets.tcat) + cat(selFcat, labelSets.fcat) + cat(selScat, labelSets.scat),
           river: (selBufZone.size !== 5 ? 1 : 0) + cat(selHmz, labelSets.hmz) +
                  cat(selBfw, labelSets.bfw) + cat(selSrz, labelSets.srz) +
-                 catLen(selWT, 3),
+                 catLen(selWT, 3) + (selGn.size ? 1 : 0),
           admin: cat(selMgr, labelSets.mgr) + cat(selZon, labelSets.zon),
           modifiers: rng(rSol, 0, 12) + rng(rSlp, 0, 5) + rng(rWet, 0, 5),
         };
       }, [labelSets, selTier, selChk, selFish, selSal, selSpecies, selTcat, selFcat, selScat,
-          selHmz, selBfw, selSrz, selMgr, selZon, selBufZone, selWT,
+          selHmz, selBfw, selSrz, selMgr, selZon, selBufZone, selWT, selGn,
           rRPF, rRPA, rComp, rCH, rSol, rSlp, rWet, rPF, rPS, rPH, rRest, rCI]);
 
       // --- Apply filters handler ---
@@ -3450,6 +3627,7 @@
           selWT: new Set(selWT),
           // Zone-level only: gates the Summary Stats buffer-zone charts, not the BID set.
           selBufZone: new Set(selBufZone),
+          selGn: new Set(selGn),
           rRPF: [...rRPF], rRPA: [...rRPA], rComp: [...rComp], rCH: [...rCH],
           rSol: [...rSol], rSlp: [...rSlp], rWet: [...rWet],
           rPF: [...rPF], rPS: [...rPS], rPH: [...rPH], rRest: [...rRest], rCI: [...rCI],
@@ -3482,6 +3660,7 @@
           // Buffer zones are draft state too. Omitting this left the rail contradicting itself
           // after Reset: chips still narrowed and Apply still dirty, while Applied read "All reaches".
           setSelBufZone(new Set([0, 1, 2, 3, 4]));
+          setSelGn(new Set());
         }
         setRRPF([0, 100]); setRRPA([0, 100]); setRComp([-1, 1]); setRCH([0, 300]);
         setRSol([0, 12]); setRSlp([0, 5]); setRWet([0, 5]);
@@ -3496,6 +3675,7 @@
         const setters = { selTier: setSelTier, selChk: setSelChk, selFish: setSelFish, selSrz: setSelSrz, selMgr: setSelMgr,
           selZon: setSelZon, selBfw: setSelBfw, selHmz: setSelHmz, selSal: setSelSal, selSpecies: setSelSpecies,
           selTcat: setSelTcat, selFcat: setSelFcat, selScat: setSelScat, selWT: setSelWT, selBufZone: setSelBufZone,
+          selGn: setSelGn,
           rRPF: setRRPF, rRPA: setRRPA, rComp: setRComp, rCH: setRCH, rSol: setRSol, rSlp: setRSlp, rWet: setRWet,
           rPF: setRPF, rPS: setRPS, rPH: setRPH, rRest: setRRest, rCI: setRCI };
         if (setters[key]) setters[key](d[key]);
@@ -3505,7 +3685,7 @@
       // --- Table columns ---
       const COLUMNS = [
         { key: 'bid', label: 'BID', w: 80, num: true, fmt: v => v },
-        { key: 'str', label: 'Stream', w: 100, fmt: v => v || '\u2014' },
+        { key: 'gn', label: 'Stream', w: 130, fmt: v => v || <span style={{ color: THEME.muted, fontStyle: 'italic' }}>Unnamed</span> },
         // `stack` splits a long header onto two lines so the numeric columns stay narrow.
         { key: 'rpsf', label: 'Restoration Priority', stack: ['Restoration', 'Priority'], term: 'rp', w: 74, num: true, fmt: v => v?.toFixed(1) },
         { key: 'rpsa', label: 'Area percentile', stack: ['Area', 'percentile'], term: 'percentile', w: 68, num: true, fmt: v => v?.toFixed(1) },
@@ -3523,7 +3703,7 @@
 
       const handleSort = (col) => {
         if (sortCol === col) setSortAsc(!sortAsc);
-        else { setSortCol(col); setSortAsc(col === 'bid' || col === 'str' || col === 'srz' || col === 'mgr'); }
+        else { setSortCol(col); setSortAsc(col === 'bid' || col === 'gn' || col === 'srz' || col === 'mgr'); }
       };
 
       // Points bucketed for Recharts: by tier (canonical colours) or by RP decile (sequential ramp).
@@ -3592,7 +3772,7 @@
       const exportCSV = () => {
         const cols = [
           { key: 'bid', hdr: 'BID' },
-          { key: 'str', hdr: 'Stream' },
+          { key: 'gn', hdr: 'GNIS_Name' },
           { key: 'rpsf', hdr: 'RP_Final' },
           { key: 'rpsa', hdr: 'Area_RP_Pctile' },
           { key: 'ci', hdr: 'Composite_Index' },
@@ -3687,6 +3867,7 @@
                 </CollapsibleSection>
 
                 <CollapsibleSection title="River Context" defaultOpen={false} badge={bidBadges.river} hue={THEME.sections.riv.hue}>
+                  <StreamPicker db={db} selected={selGn} setSelected={setSelGn} />
                   <div className="fl"><span><Term id="zones">Buffer zones</Term> <span style={{ fontWeight: 400, color: THEME.muted }}>(zone charts only)</span></span></div>
                   <div className="chips">
                     {bufZoneLabels.map((lbl, i) => {
@@ -4261,11 +4442,15 @@
       // Applied BID Query filters — shared with SummaryStatsPanel so the stats
       // page responds to whatever the user last hit Apply on.
       const [appliedFilters, setAppliedFilters] = React.useState(null);
-      // Hash-based deep linking: #bid/XXXXX opens Bank Explorer for that BID
+      // Hash-based deep linking: #bid/XXXXX opens Bank Explorer for that BID;
+      // #srz/, #zoning/, #bfw/, #stream/ open Summary Stats filtered (see parseStatsLink).
       const initHash = window.location.hash;
       const hashBidMatch = initHash.match(/^#bid\/(.+)/);
-      const [activeTab, setActiveTab] = React.useState(hashBidMatch ? 'bank_explorer' : 'bid_query');
+      const initLink = parseStatsLink(initHash);
+      const [activeTab, setActiveTab] = React.useState(
+        hashBidMatch ? 'bank_explorer' : initLink ? 'summary_stats' : 'bid_query');
       const [pendingBID, setPendingBID] = React.useState(hashBidMatch ? hashBidMatch[1] : null);
+      const [pendingLink, setPendingLink] = React.useState(initLink);
 
       // Update hash when tab or BID changes
       const updateHash = React.useCallback((tab, bid) => {
@@ -4284,10 +4469,21 @@
             setActiveTab('bank_explorer');
             setPendingBID(m[1]);
           }
+          const link = parseStatsLink(window.location.hash);
+          if (link) setPendingLink(link);
         };
         window.addEventListener('hashchange', onHash);
         return () => window.removeEventListener('hashchange', onHash);
       }, []);
+
+      // Apply a pending Summary Stats link once the database is loaded. The filter is written
+      // as the applied BID Query state, so "Edit on BID Query" opens with it already selected.
+      React.useEffect(() => {
+        if (!pendingLink || !dbReady(sharedBidData?.db)) return;
+        setAppliedFilters(statsLinkFilters(sharedBidData.db, pendingLink));
+        setActiveTab('summary_stats');
+        setPendingLink(null);
+      }, [pendingLink, sharedBidData]);
 
       React.useEffect(() => {
         let cancelled = false;

@@ -65,12 +65,16 @@ python tests/run_all.py
 
 Build inputs consumed automatically by `build_client_site.py` (no separate step needed):
 `BID_Scores_Calculated_20260914_circaspect.csv`, `data_cache/lc_derived_20260501.json`,
-`data_overrides/fish_access_override.csv`, and `data_overrides/aspect_override.csv`. `BID_ZID_LC_20260501.csv` is **not** among them —
+`data_overrides/fish_access_override.csv`, `data_overrides/aspect_override.csv`, and
+`data_overrides/gnis_names.csv` (GNIS stream name per bank, the `bids.gn` column behind the
+stream filter and `#stream/` links; the build stops if any bank is missing from it). `BID_ZID_LC_20260501.csv` is **not** among them —
 it is read only under `--refresh-lc-cache`, to regenerate that cache. Only regenerate the fish
-override by hand, and only when `TP_Split_JOIN_20260507.csv` or the scoring CSV is refreshed:
+override and the GNIS names by hand, and only when `TP_Split_JOIN_20260507.csv` (or, for the
+fish override, the scoring CSV) is refreshed:
 
 ```bash
 python tools/make_fish_override.py
+python tools/make_gnis_names.py
 ```
 
 Site output is ~6.6 MB (one gzipped SQLite ~5.0 MB, self-hosted vendor scripts ~1.3 MB, and `index.html` ~0.24 MB). **Never run a bundler** — this ships as a multi-file site only.
@@ -213,6 +217,19 @@ https://<pages-url>/#bid/<BID_ID>
 
 for example `#bid/AC334_4`. That opens Bank Explorer directly on that bank. Use it in webmap
 popups. Clicking a BID in the query result list opens the same URL in a new browser tab.
+
+Summary Stats links open that tab with a BID Query filter applied (URL-encode each value; pairs
+chain, and matching ignores case):
+
+```
+#srz/<Salmon Recovery Zone>     #zoning/<zoning group>     #bfw/<bankfull width class>
+#stream/<GNIS name>             #stream/<GNIS name>/srz/<zone>
+```
+
+GNIS names repeat across the watershed (11 names span more than one zone, e.g. Anderson Creek),
+so stream popups should chain the zone:
+`"https://esassoc.github.io/wria1_riparian/#stream/" + UrlEncode($feature.GNIS_NAME) + "/srz/" + UrlEncode($feature.SR_Zone)`.
+An unrecognised value is skipped (logged to the console), never an error.
 
 ## 9. Known characteristics (not defects)
 

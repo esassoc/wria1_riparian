@@ -117,6 +117,14 @@ def main():
     ).fetchone()[0]
     check(non_null == 30850, f"rpsn/sols/slps are non-null on all 30850 rows (got {non_null})")
 
+    # GNIS stream name (for the #stream/ deep link): column present, named on some banks,
+    # and never an empty string (unnamed reaches are NULL, so `gn = ''` can't match).
+    check("gn" in cols, "bids table has column gn (GNIS stream name)")
+    n_named, n_empty = conn.execute(
+        "SELECT SUM(gn IS NOT NULL), SUM(gn = '') FROM bids").fetchone()
+    check(n_named and n_named > 5000, f"gn is set on the named reaches (got {n_named})")
+    check(not n_empty, f"gn carries no empty strings (got {n_empty})")
+
     for c in ("rp", "rpf", "sol", "slp", "rpa"):
         check(c not in cols, f"legacy linear column {c} is gone from bids")
     idx = [r[0] for r in conn.execute(
