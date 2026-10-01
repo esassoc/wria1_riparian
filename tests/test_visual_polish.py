@@ -61,8 +61,11 @@ def main():
     # --- Task 3: shell ---
     for cp in ("\U0001F3D4", "\U0001F50E", "\U0001F4CA", "\U0001F332", "\U0001F52C", "⚡", "⬇", "\U0001F50D", "〰"):
         check(cp not in HTML, f"emoji U+{ord(cp):04X} absent")
-    present("Water Resource Inventory Area", "footer glossary present")
-    present("Historic Migration Zone", "HMZ expanded in glossary")
+    # Abbreviations are expanded where they first appear (WRIA 1 header hover, Bank ID (BID)
+    # on the query tab, HMZ in the zone captions), not in a footer glossary.
+    present("Water Resource Inventory Area", "WRIA expanded (header hover)")
+    present("Historic Migration Zone", "HMZ expanded")
+    absent("Kept short for space", "footer abbreviation glossary removed")
     absent("total polygons", "internal polygon counts gone from footer")
     absent("./logo.png", "no logo reference")
     present('className="tabs"', "new tab nav present")
@@ -80,7 +83,8 @@ def main():
     present("function StatsSectionModifiers(", "Solar + Wetland merged into Site Modifiers")
     absent("function StatsSectionSolar(", "old Solar section gone")
     absent("function StatsSectionWetland(", "old Wetland section gone")
-    present("Edit on BID Query", "edit link present on Summary Stats")
+    present("Edit on Bank ID Query", "edit link present on Summary Stats")
+    present("Bank ID (BID)", "BID spelled out at its first mention on the query tab")
     present("WRIA baseline", "global legend chip present")
     absent("Showing all reaches &mdash;", "old em-dash note replaced")
 

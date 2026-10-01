@@ -73,7 +73,9 @@ def main():
     check('<style id="tw">' in _shipped, "static Tailwind stylesheet inlined")
     check(".grid-cols-5{" in _shipped or ".grid-cols-5 {" in _shipped,
           "static stylesheet contains a utility the page uses")
-    check(r".lg\:grid-cols-4{" in _shipped or r".lg\:grid-cols-4 {" in _shipped,
+    # Bank Explorer's info-card row (lg:grid-cols-3 since the Technical card moved into the
+    # zone table's collapsed details).
+    check(r".lg\:grid-cols-3{" in _shipped or r".lg\:grid-cols-3 {" in _shipped,
           "static stylesheet contains the responsive-variant utility the page uses")
     check("React.createElement(" in _shipped, "JSX compiled to React.createElement calls")
     _compiled = _shipped.split('<script>\n', 1)[-1].rsplit('\n</script>', 1)[0]

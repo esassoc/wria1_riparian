@@ -106,6 +106,7 @@
     .term-pop{z-index:60;width:max-content;max-width:280px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:8px 10px;font:400 12px/1.4 var(--font-b);color:var(--ink-2);box-shadow:0 4px 14px rgba(22,58,74,.12);text-transform:none;letter-spacing:0;white-space:normal}
     /* chart tooltip */
     .tip{position:absolute;z-index:50;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:6px 9px;font:400 11.5px/1.4 var(--font-b);color:var(--ink-2);box-shadow:0 4px 14px rgba(22,58,74,.12);white-space:nowrap}
+    .tip .vs{font:500 11px var(--font-m);color:var(--accent-ink)}
     .tip b{color:var(--ink);font-weight:600}
     .tip .num{color:var(--ink)}
     /* landcover textures */
@@ -159,6 +160,9 @@
     .delta{font:500 11px var(--font-m);padding:1px 6px;border-radius:3px;background:var(--accent-tint);color:var(--accent-ink)}
     .delta.dn{background:var(--attn-tint);color:#9A4526}
     .delta.eq{background:var(--line-2);color:var(--muted)}
+    /* good/bad: direction judged per measure (e.g. lower Restoration Priority = better condition) */
+    .delta.good{background:#E2F2EC;color:#1F6E57}
+    .delta.bad{background:var(--attn-tint);color:#9A4526}
     .rtile{border:1px solid var(--line);border-radius:5px;padding:10px 12px;background:var(--surface-2)}
     .rtile .k{font-size:11.5px;color:var(--muted);font-weight:500}
     .rtile .v{font:600 22px/1.1 var(--font-h);color:var(--c);margin-top:3px;font-variant-numeric:tabular-nums}
@@ -403,6 +407,9 @@
     const displaySrz = v => SRZ_DISPLAY[v] || v || 'Unknown';
     // GNIS stream name. Unnamed reaches are NULL in bids.gn; in the stream filter they are
     // picked with this token (never a real GNIS name).
+    // Species display names. "Spring (early) Chinook" makes plain that the species chip and the
+    // Early (spring) Chinook filter are the same population. Stored values never change.
+    const speciesLabel = v => ({ 'Pink (Odd Year)': 'Pink (odd year)', 'Spring Chinook': 'Spring (early) Chinook' })[v] || v;
     const GN_UNNAMED = '__unnamed__';
     const gnLabel = v => (v == null || v === GN_UNNAMED) ? 'Unnamed reach' : v;
     // Reverse of SRZ_DISPLAY, so charts that already renamed a row's key for display
@@ -421,6 +428,11 @@
       zones: 'Buffer zones are distance bands measured from the channel. HMZ is the Historic Migration Zone, the ground the channel has occupied historically; HMZ+300 extends 300 ft beyond it.',
       bfw: 'Bankfull width class: stream size from channel width at bankfull flow, narrowest to widest: Headwater/Ditch, Small Stream, Medium Stream, Large Stream, Mainstem.',
       icat: 'Washington Ecology 303(d) listing category. 5 = impaired and needs a cleanup plan; 4A = impaired with a plan in place; 2 = waters of concern.',
+      wria1: 'WRIA 1 is Water Resource Inventory Area 1: the Nooksack River basin, the Fraser River tributaries, and the coastal drainages of Whatcom and Skagit counties.',
+      fish: 'Fish access: Fish-bearing reaches have documented or presumed fish use. Gradient-accessible reaches have no documented fish use but are not blocked by stream gradient, so fish use is possible; they are capped at priority tier P5.',
+      wt: 'Waterbody type: Active Channel is a bank of the Nooksack mainstem, its forks, or another large river, measured from the active channel edge; Tributary is any other stream, measured from its centerline; Lake is a lake or pond shoreline.',
+      owner: 'Owner: land manager from the USGS Protected Areas Database of the United States (PAD-US). Private/Unknown is land not listed in PAD-US, which is mostly private.',
+      restorable: '% Restorable: the share of the bank\'s area in forest, shrub, or herbaceous/bare ground, the land that can carry riparian vegetation. Impervious surface, water, gravel bars and abandoned channel, and railway are excluded. A low value means much of the bank is developed or open water, so there is less ground to plant even if the score is high.',
       wria: 'The WRIA baseline is every scored bank in WRIA 1 (30,850). It is the comparison behind every chart on this page.',
       tier: 'Priority tier combines four signals: Spring Chinook presence, location within the Nooksack, 303(d) temperature listing, and fish access. Among fish-bearing reaches, P1 through P4 rank by how many of the Chinook, Nooksack and temperature signals apply. Reaches without fish access are capped at P5 by access, not by riparian condition - a pristine reach above a barrier and a bare one both land in P5.',
     };
@@ -476,6 +488,24 @@
       if (!tip) return null;
       return <div className="tip" style={{ left: tip.x, top: tip.y }}>{tip.node}</div>;
     }
+    // Tooltip line: how the selection differs from the WRIA-wide baseline. `unit` follows the
+    // number (' pts' for shares, so a 12% vs 8% share reads "+4.0 pts", not "+4.0%").
+    // `rel` reports a relative difference instead (histogram counts against the scaled WRIA).
+    // Returns null when there is no baseline (the all-reaches view), so callers can drop it in.
+    function vsWria(sel, wria, { unit = '', digits = 1, rel = false } = {}) {
+      if (sel == null || wria == null || isNaN(sel) || isNaN(wria)) return null;
+      const d = rel ? (wria ? (sel - wria) / wria * 100 : null) : sel - wria;
+      if (d == null) return null;
+      const txt = Math.abs(d) < 0.05 ? 'same as WRIA'
+        : `${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(digits)}${rel ? '%' : unit} vs WRIA`;
+      return <><br /><span className="vs">{txt}</span></>;
+    }
+    // Plain-text twin of vsWria for native title="" tooltips.
+    const vsWriaText = (sel, wria, unit = '') => {
+      if (sel == null || wria == null) return '';
+      const d = sel - wria;
+      return Math.abs(d) < 0.05 ? ' · same as WRIA' : ` · ${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(1)}${unit} vs WRIA`;
+    };
 
     // Fit a category label into a gutter: one line, else two lines, else two lines with an
     // ellipsis (the full text goes in the row tooltip and the SVG <title>).
@@ -1166,7 +1196,7 @@
               </tfoot>
             </table>
             <div className="num" style={{ fontSize: 11, color: THEME.muted, textAlign: 'center', marginTop: 6 }}>
-              I = {st.wH.toFixed(2)}·M{st.curveH ? <sub>s</sub> : ''} + {st.wD.toFixed(2)}·D{st.curveD ? <sub>s</sub> : ''} + {st.wC.toFixed(2)}·C{st.curveC ? <sub>s</sub> : ''} &nbsp;→&nbsp; RP = 55×(1−I) &nbsp;→&nbsp; +solar +slope
+              I = {st.wH.toFixed(2)}·H{st.curveH ? <sub>s</sub> : ''} + {st.wD.toFixed(2)}·D{st.curveD ? <sub>s</sub> : ''} + {st.wC.toFixed(2)}·C{st.curveC ? <sub>s</sub> : ''} &nbsp;→&nbsp; RP = 55×(1−I) &nbsp;→&nbsp; +solar +slope
             </div>
             </div>
           </div>
@@ -1210,7 +1240,7 @@
                 <span className="num" style={{ fontSize: 11, width: 24, textAlign: 'right', color: THEME.muted }}>{st[`s${key}`].toFixed(1)}</span>
               </div>
             ))}
-            <p style={{ fontSize: 11, color: THEME.muted, margin: '4px 0 0' }}>Default: S-curve - M 1.2, D 1.2, C 1.5. Strength 1.0 = linear.</p>
+            <p style={{ fontSize: 11, color: THEME.muted, margin: '4px 0 0' }}>Default: S-curve, canopy height 1.2, density 1.2, composition 1.5. Strength 1.0 = linear.</p>
             <div className="eyebrow" style={{ margin: '14px 0 8px' }}>Zone distance curve</div>
             <select value={st.zoneCurve || 'moderate'} onChange={e => upd('zoneCurve', e.target.value)}
               style={{ font: '12px var(--font-b)', border: `1px solid ${THEME.line}`, borderRadius: 4, padding: '3px 8px', width: '100%', background: THEME.surface }}>
@@ -1768,13 +1798,13 @@
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
             <h2 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>Bank Explorer</h2>
-            <p style={{ margin: 0, color: THEME.muted, fontSize: 13 }}>Search by BID, stream name, or Salmon Recovery Zone. Deep link: append <span className="num">#bid/AC334_4</span> to the page URL.</p>
+            <p style={{ margin: 0, color: THEME.muted, fontSize: 13 }}>Search by Bank ID (BID), stream name, or Salmon Recovery Zone. Deep link: append <span className="num">#bid/AC334_4</span> to the page URL.</p>
           </div>
           <div ref={searchRef} style={{ position: 'relative', marginBottom: 14, maxWidth: 520 }}>
             <input type="text" value={searchTerm} aria-label="Search banks"
               onChange={e => { setSearchTerm(e.target.value); setShowDropdown(true); }}
               onFocus={() => searchTerm.length > 0 && setShowDropdown(true)}
-              placeholder="Search by BID, stream name, or Salmon Recovery Zone"
+              placeholder="Search by Bank ID, stream name, or Salmon Recovery Zone"
               style={{ width: '100%', font: '14px var(--font-b)', padding: '8px 12px', border: `1px solid ${THEME.line}`, borderRadius: 5, background: THEME.surface, color: THEME.ink }} />
             {showDropdown && filtered.length > 0 && (
               <div className="card" style={{ position: 'absolute', zIndex: 50, width: '100%', marginTop: 4, maxHeight: 320, overflowY: 'auto', boxShadow: '0 8px 24px rgba(22,58,74,.12)' }}>
@@ -1823,7 +1853,7 @@
                 <div className="card">
                   <div className="card-h">
                     <h3>Landcover composition by zone</h3>
-                    <span style={{ fontSize: 11.5, color: THEME.muted }}>← Channel · Upland →</span>
+                    <span style={{ fontSize: 11.5, color: THEME.muted }}>← Channel · Upland → · <Term id="zones">HMZ = Historic Migration Zone</Term></span>
                   </div>
                   <div className="card-b">
                     {/* The zone grid is built from fixed-size cells across ~54 columns (beCell px,
@@ -1965,7 +1995,7 @@
                       <div style={{ minWidth: 220, flex: 1 }}>
                         <div style={{ height: 14, borderRadius: 3, border: `1px solid ${THEME.line}`, background: `linear-gradient(90deg, ${COMP_POLES.conifer}, ${COMP_POLES.mid} 50%, ${COMP_POLES.deciduous})` }} />
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: THEME.muted, marginTop: 4 }}>
-                          <span>Conifer</span><span style={{ color: THEME.ink2, fontWeight: 500 }}><Term id="comp">Mixed (0) = the Forest colour</Term></span><span>Deciduous</span>
+                          <span>Conifer</span><span style={{ color: THEME.ink2, fontWeight: 500 }}><Term id="comp">Mixed (0) = the Forest color</Term></span><span>Deciduous</span>
                         </div>
                       </div>
                       <LegendRow className="lg" items={LC9.slice(1).map(l => ({ label: l.key, color: l.color, texture: l.texture }))} />
@@ -2001,7 +2031,7 @@
                       </tr>
                       <tr className="border-b">
                         <td>Wetland push</td>
-                        <td className="n" style={{ color: THEME.accentInk }}>+{attr.wet}</td>
+                        <td className="n" style={{ color: THEME.accentInk }}>+{(attr.wet ?? 0).toFixed(1)}</td>
                       </tr>
                       <tr className="tot">
                         <td>Restoration Priority</td>
@@ -2060,7 +2090,7 @@
               </div>
 
               {/* Info panels */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                 {/* Location & Classification */}
                 <div className="card">
                   <div className="card-h"><h3>Location</h3></div>
@@ -2082,7 +2112,7 @@
                       <div><Chip dot color={colorOf('srz', attr.srz)}>{displaySrz(attr.srz)}</Chip></div>
                     </div>
                     <div className="flex gap-4">
-                      <div><span style={{ fontSize: 11, color: THEME.muted }}>Spring Chinook</span>
+                      <div><span style={{ fontSize: 11, color: THEME.muted }}>Early Chinook</span>
                         <div className="text-xs font-mono">{attr.chk === 'Y' ? 'Yes' : 'No'}</div>
                       </div>
                       <div><span style={{ fontSize: 11, color: THEME.muted }}>Fish access</span>
@@ -2090,7 +2120,7 @@
                       </div>
                     </div>
                     <div>
-                      <span style={{ fontSize: 11, color: THEME.muted }}>Salmon Species</span>
+                      <span style={{ fontSize: 11, color: THEME.muted }}>Salmon species</span>
                       <div className="text-xs">{attr.sps || <span className="text-gray-400">—</span>}</div>
                     </div>
                     <div className="flex gap-4">
@@ -2110,8 +2140,8 @@
                     <div><span style={{ fontSize: 11, color: THEME.muted }}>Zoning</span>
                       <div><Chip dot color={colorOf('zon', attr.zon)}>{attr.zon}</Chip></div>
                     </div>
-                    <div><span style={{ fontSize: 11, color: THEME.muted }}>City/UGA</span><div className="text-xs font-medium">{attr.cua || '-'}</div></div>
-                    <div><span style={{ fontSize: 11, color: THEME.muted }}>Jurisdiction</span><div className="text-xs font-medium">{attr.jur || '-'}</div></div>
+                    <div><span style={{ fontSize: 11, color: THEME.muted }}>City/UGA</span><div className="text-xs font-medium">{attr.cua || '—'}</div></div>
+                    <div><span style={{ fontSize: 11, color: THEME.muted }}>Jurisdiction</span><div className="text-xs font-medium">{attr.jur || '—'}</div></div>
                   </div>
                 </div>
 
@@ -2175,23 +2205,14 @@
                       <div className="mt-3 pt-3 border-t border-gray-200">
                         <div className="text-xs text-gray-500 font-medium mb-2">Solar push context</div>
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xs text-gray-500">This BID:</span>
-                          <span className="text-sm font-mono font-bold" style={{ color: THEME.ink }}>+{sv}</span>
+                          <span className="text-xs text-gray-500">This bank:</span>
+                          <span className="text-sm font-mono font-bold" style={{ color: THEME.ink }}>+{Number(sv).toFixed(1)}</span>
                           <span className="text-xs text-gray-400">pts</span>
                           <span className="text-xs px-1.5 py-0.5 rounded font-semibold" style={{ color: THEME.ink2, background: THEME.surface2 }}>
                             {percentile}{pctSuffix} percentile of the watershed
                           </span>
                         </div>
-                        {attr.asp != null && (() => {
-                          const af = attr.af ?? 0;
-                          const tag = af > 0.05 ? 'boost' : af < -0.05 ? 'reduction' : 'neutral';
-                          return (
-                            <div className="text-xs text-gray-600 mb-2 italic">
-                              Aspect {attr.asp}° ({aspectCompass(attr.asp)}) → factor {(af >= 0 ? '+' : '') + af.toFixed(2)}
-                              <span className="ml-1 font-semibold" style={{ color: THEME.ink2 }}>({tag})</span>
-                            </div>
-                          );
-                        })()}
+                        {/* Aspect and its factor are shown once, in the Score breakdown. */}
                         {/* Distribution bar */}
                         <div className="relative h-2.5 rounded-full mb-1.5" style={{ background: `linear-gradient(to right, ${THEME.accentTint}, ${THEME.sections.mod.hue})` }}>
                           <div className="absolute top-0 h-2.5 w-0.5 bg-gray-800 rounded" style={{ left: `${Math.min(percentile, 100)}%` }}></div>
@@ -2216,18 +2237,6 @@
                   </div>
                 </div>
 
-                {/* Technical Details */}
-                <div className="card">
-                  <div className="card-h"><h3>Technical</h3></div>
-                  <div className="card-b" style={{ display: 'grid', gap: 8 }}>
-                    <div><span style={{ fontSize: 11, color: THEME.muted }}>Zones Present</span><div className="text-xs font-mono">{attr.zc} of 5</div></div>
-                    <div><span style={{ fontSize: 11, color: THEME.muted }}>Scored LC Polygons</span><div className="text-xs font-mono">{attr.pc}<span className="text-gray-400 ml-1 font-normal">(restorable features across all zones)</span></div></div>
-                    <div><span style={{ fontSize: 11, color: THEME.muted }}>Dominant Cover</span><div className="text-xs font-mono">{
-                      ({ D1_Forest: 'Forest', D2_Shrub_Comp: 'Shrub/Woodland (w/ comp)', D3_Shrub_NoComp: 'Shrub (no comp)', D4_HerbGround: 'Herb/Ground', Excluded: 'Non-restorable' })[attr.dom] || attr.dom
-                    }</div></div>
-                    <div><span style={{ fontSize: 11, color: THEME.muted }}>Split Sequence</span><div className="text-xs font-mono">{attr.ss}</div></div>
-                  </div>
-                </div>
               </div>
 
               {/* Zone Detail Table */}
@@ -2294,6 +2303,18 @@
                       })}
                     </tbody>
                   </table>
+                  {/* Internal build fields, kept for QA but collapsed by default. */}
+                  <details style={{ marginTop: 10, fontSize: 12, color: THEME.muted }}>
+                    <summary style={{ cursor: 'pointer', color: THEME.ink2 }}>Technical details</summary>
+                    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 6 }}>
+                      <span>Zones present <b className="num" style={{ color: THEME.ink2 }}>{attr.zc} of 5</b></span>
+                      <span>Scored land cover polygons <b className="num" style={{ color: THEME.ink2 }}>{attr.pc}</b></span>
+                      <span>Dominant cover <b style={{ color: THEME.ink2 }}>{
+                        ({ D1_Forest: 'Forest', D2_Shrub_Comp: 'Shrub/woodland with composition', D3_Shrub_NoComp: 'Shrub without composition', D4_HerbGround: 'Herbaceous/ground', Excluded: 'Non-restorable' })[attr.dom] || attr.dom
+                      }</b></span>
+                      <span>Split sequence <b className="num" style={{ color: THEME.ink2 }}>{attr.ss}</b></span>
+                    </div>
+                  </details>
                 </div>
               </div>
 
@@ -2426,7 +2447,7 @@
                         </div>
                       )}
                       <div className="text-xs text-gray-500 pt-3 mt-2 border-t">
-                        Reach mean RP <strong className="text-gray-700">{rpMean}</strong>
+                        Reach mean Restoration Priority <strong className="text-gray-700">{rpMean}</strong>
                         <span className="mx-2 text-gray-400">·</span>
                         Restoration Priority range <strong className="text-gray-700">{rpMin}–{rpMax}</strong>
                         <span className="mx-2 text-gray-400">·</span>
@@ -2522,16 +2543,17 @@
       const hue = THEME.sections.riv.hue;
       // Scale to the longest named stream.
       const max = streams.named.length && streams.named[0].mi ? streams.named[0].mi : 1;
-      const fmtMi = mi => mi >= 100 ? `${Math.round(mi).toLocaleString()} mi` : `${mi.toFixed(1)} mi`;
+      const fmtMi = mi => mi >= 100 ? `${Math.round(mi).toLocaleString()} mi` : mi < 0.05 ? '<0.1 mi' : `${mi.toFixed(1)} mi`;
       const nq = q.trim().toLowerCase();
       const matches = nq ? streams.named.filter(s => s.name.toLowerCase().includes(nq)) : streams.named;
       const toggle = v => { const s = new Set(selected); s.has(v) ? s.delete(v) : s.add(v); setSelected(s); };
       const addAll = names => setSelected(new Set([...selected, ...names]));
+      const removeAll = names => { const s = new Set(selected); names.forEach(n => s.delete(n)); setSelected(s); };
       const presets = [
         ['Nooksack mainstem + forks', streams.named.filter(s => /Nooksack River$/.test(s.name)).map(s => s.name)],
         ['10 longest', streams.named.slice(0, 10).map(s => s.name)],
         // Every GNIS-named stream and lake; leaves out the unnamed reaches.
-        ['All named streams', streams.named.map(s => s.name)],
+        ['All named streams and lakes', streams.named.map(s => s.name)],
       ];
       const Row = ({ v, label, mi, tip }) => {
         const on = selected.has(v);
@@ -2550,23 +2572,20 @@
       return (
         <div className="spk" style={{ '--c': hue }}>
           <div className="fl">
-            <span>Stream name <span style={{ fontWeight: 400, color: THEME.muted }}>(GNIS)</span></span>
+            <span>Stream or lake name <span style={{ fontWeight: 400, color: THEME.muted }}>(GNIS)</span></span>
             {selected.size > 0 && <button type="button" onClick={() => setSelected(new Set())}>Clear</button>}
           </div>
-          {selected.size > 0 && (
-            <div className="chips" style={{ marginBottom: 6 }}>
-              {/* Past 8 picks (e.g. "All named streams") one summary chip replaces the chip wall;
-                  individual picks stay visible as ticked rows in the list below. */}
-              {selected.size > 8
-                ? <Chip on color={hue} onClear={() => setSelected(new Set())}>{selected.size} streams selected</Chip>
-                : [...selected].map(v => <Chip key={v} on color={hue} onClear={() => toggle(v)}>{gnLabel(v)}</Chip>)}
-            </div>
-          )}
+          {/* No separate selected-chip row: picks show as ticked rows below and in the Applied row.
+              A preset fills in once all its streams are picked; clicking it again unpicks them. */}
           <div className="chips" style={{ marginBottom: 6 }}>
-            {presets.map(([lbl, names]) => <Chip key={lbl} off color={hue} onClick={() => addAll(names)}>+ {lbl}</Chip>)}
+            {presets.map(([lbl, names]) => {
+              const on = names.length > 0 && names.every(n => selected.has(n));
+              return <Chip key={lbl} on={on} off={!on} color={hue} title={on ? 'Click to unselect these streams' : undefined}
+                onClick={() => on ? removeAll(names) : addAll(names)}>{lbl}</Chip>;
+            })}
           </div>
           <input type="search" value={q} onChange={e => setQ(e.target.value)} aria-label="Find a named stream"
-            placeholder={`Find among ${streams.named.length} named streams`} />
+            placeholder={`Find among ${streams.named.length} named streams and lakes`} />
           {nq && matches.length > 1 && (
             <button type="button" className="spk-all" onClick={() => addAll(matches.map(m => m.name))}>
               Select all {matches.length} matching &ldquo;{q.trim()}&rdquo;
@@ -2695,6 +2714,9 @@
       selScat: 'Sediment category', selWT: 'Waterbody',
     };
     const WT_LABELS_ALL = ['Active Channel', 'Tributary', 'Lake'];
+    // Ascending channel width. Mainstem is the widest class, confirmed against the source
+    // methods; an earlier draft had it before Large Stream. Used by the filter chips and charts.
+    const BFW_ORDER = ['Headwater/Ditch', 'Small Stream', 'Medium Stream', 'Large Stream', 'Mainstem'];
     // Every filter's full label set, from DISTINCT queries. Shared by the BID Query panel and
     // the #srz/ deep link, which has to build an applied filter before that panel ever mounts.
     function sqlLabelSets(db) {
@@ -2708,7 +2730,9 @@
         tier: getDistinct('tier'), chk: getDistinct('chk'),
         fish: getDistinct('fish'),
         srz: getDistinct('srz'), mgr: getDistinct('mgr'),
-        zon: getDistinct('zon'), bfw: getDistinct('bfw'),
+        zon: getDistinct('zon'),
+        // Stream size reads narrowest to widest, not alphabetically (which put Large before Medium).
+        bfw: getDistinct('bfw').sort((a, b) => BFW_ORDER.indexOf(a) - BFW_ORDER.indexOf(b)),
         hmz: ['N', 'Y'], sal: ['N', 'Y'],
         tcat: getDistinct('tic', 'ti=1'),
         fcat: getDistinct('fic', 'fi=1'),
@@ -3001,7 +3025,7 @@
               const gx = pl + i * bw;
               const g = wria && wria[i] ? wria[i].n * scale : null;
               return (
-                <g key={i} onMouseEnter={e => show(e, <><b>{fmt(b.x0)}–{fmt(b.x1)}</b><br />Selection <span className="num">{b.n.toLocaleString()}</span>{wria && <><br />WRIA (scaled) <span className="num">{Math.round(g).toLocaleString()}</span></>}</>)} onMouseLeave={hide}>
+                <g key={i} onMouseEnter={e => show(e, <><b>{fmt(b.x0)}–{fmt(b.x1)}</b><br />Selection <span className="num">{b.n.toLocaleString()}</span>{wria && <><br />WRIA (scaled) <span className="num">{Math.round(g).toLocaleString()}</span></>}{wria && vsWria(b.n, g, { rel: true, digits: 0 })}</>)} onMouseLeave={hide}>
                   {g != null && <rect className="ghost" x={gx + 1} y={y(g)} width={bw - 4} height={Math.max(0, H - pb - y(g))} rx={2} />}
                   <rect className="hit" x={gx + 1} y={y(b.n)} width={bw - 4} height={Math.max(0, H - pb - y(b.n))} rx={2} fill={color} />
                 </g>
@@ -3011,7 +3035,7 @@
             {meanSel != null && <line x1={x(meanSel)} x2={x(meanSel)} y1={pt} y2={H - pb} stroke={THEME.ink} strokeWidth={1.5} />}
             <line className="axis" x1={pl} x2={KW - 4} y1={H - pb} y2={H - pb} />
             {ticks(xMin, xMax).map(t => <text key={t} x={x(t)} y={H - pb + 13} textAnchor="middle">{fmt(t)}</text>)}
-            <text x={4} y={pt + 4} textAnchor="start">reaches</text>
+            <text x={4} y={pt + 4} textAnchor="start">banks</text>
           </svg>
           <TipLayer tip={tip} />
         </div>
@@ -3029,7 +3053,10 @@
             {ticks(0, 100).map(t => <g key={t}><line className="grid" x1={sc(t)} x2={sc(t)} y1={pt - 6} y2={H - 18} /><text x={sc(t)} y={H - 5} textAnchor="middle">{t}</text></g>)}
             {rows.map((r, i) => {
               const y = pt + i * rowH + rowH / 2, hasW = r.wria != null;
-              const up = hasW ? r.sel >= r.wria : true;
+              // Gap bar tone: every dumbbell plots mean Restoration Priority, where higher means
+              // more restoration need. Worse than WRIA reads red, better green, about equal grey.
+              const gap = hasW ? r.sel - r.wria : 0;
+              const gapTone = Math.abs(gap) < 1 ? THEME.ghost : gap > 0 ? DELTA_BAD : DELTA_GOOD;
               // Identity encoding: the filled dot is the category's own canonical colour
               // where one exists (falls back to the section hue - e.g. solar bands,
               // wetland connection, a folded "Other" row - where there is no registry
@@ -3037,9 +3064,9 @@
               // THEME.ghost, unchanged below) - same category, two different questions.
               const dotColor = canonicalColor(attr, r.rawKey ?? r.key, color);
               return (
-                <g key={r.key} onMouseEnter={e => show(e, <><b>{r.key}</b><br />Restoration Priority <span className="num">{fmt1(r.sel)}</span>{hasW && <> · WRIA <span className="num">{fmt1(r.wria)}</span></>}<br />Composite Index <span className="num">{fmt1(r.ci)}</span>{hasW && <> · WRIA <span className="num">{fmt1(r.wci)}</span></>}{r.n != null && <><br /><span className="num">{r.n.toLocaleString()}</span> reaches</>}</>)} onMouseLeave={hide}>
+                <g key={r.key} onMouseEnter={e => show(e, <><b>{r.key}</b><br />Restoration Priority <span className="num">{fmt1(r.sel)}</span>{hasW && <> · WRIA <span className="num">{fmt1(r.wria)}</span></>}{hasW && vsWria(r.sel, r.wria)}<br />Composite Index <span className="num">{fmt1(r.ci)}</span>{hasW && <> · WRIA <span className="num">{fmt1(r.wci)}</span></>}{hasW && vsWria(r.ci, r.wci)}{r.n != null && <><br /><span className="num">{r.n.toLocaleString()}</span> banks</>}</>)} onMouseLeave={hide}>
                   <CatLabel text={r.key} x={KPL - 10} y={y + 4} maxPx={KPL - 16} />
-                  {hasW && <line x1={sc(r.wria)} x2={sc(r.sel)} y1={y} y2={y} stroke={up ? color : THEME.ghost} strokeWidth={4} strokeLinecap="round" opacity={0.55} />}
+                  {hasW && <line x1={sc(r.wria)} x2={sc(r.sel)} y1={y} y2={y} stroke={gapTone} strokeWidth={4} strokeLinecap="round" opacity={0.6} />}
                   {hasW && <circle cx={sc(r.wria)} cy={y} r={5} fill="#fff" stroke={THEME.ghost} strokeWidth={1.75} />}
                   <circle className="hit" cx={sc(r.sel)} cy={y} r={5.5} fill={dotColor} stroke="#fff" strokeWidth={1.5} />
                   {(() => {
@@ -3075,6 +3102,7 @@
         ? lerpHex(THEME.accentTint, THEME.accentInk, 0.5)
         : lerpHex(THEME.accentTint, THEME.accentInk, Math.max(0, Math.min(1, (v - seqLo) / (seqHi - seqLo))));
       const col = v => v == null ? THEME.line2 : v === 'noforest' ? NOFOREST_FILL : mode === 'div' ? compColor(v) : seq(v);
+      const baseRow = rows.find(r => r.baseline);   // the WRIA row, when the chart carries one
       return (
         <div className="kchart" style={{ position: 'relative' }}>
           <svg viewBox={`0 0 ${KW} ${H}`}>
@@ -3090,7 +3118,7 @@
                       fill={col(r.cells[j])}
                       stroke={r.cells[j] === 'noforest' ? NOFOREST_STROKE : 'none'}
                       strokeWidth={r.cells[j] === 'noforest' ? 1 : 0}
-                      onMouseEnter={e => show(e, <><b>{r.key}</b> · {c}<br />{r.cells[j] == null ? 'no area in zone' : r.cells[j] === 'noforest' ? 'no forest in this zone' : <span className="num">{fmt(r.cells[j])}</span>}</>)} onMouseLeave={hide} />
+                      onMouseEnter={e => show(e, <><b>{r.key}</b> · {c}<br />{r.cells[j] == null ? 'no area in zone' : r.cells[j] === 'noforest' ? 'no forest in this zone' : <span className="num">{fmt(r.cells[j])}</span>}{!r.baseline && baseRow && typeof r.cells[j] === 'number' && typeof baseRow.cells[j] === 'number' && vsWria(r.cells[j], baseRow.cells[j], { digits: mode === 'div' ? 2 : 1 })}</>)} onMouseLeave={hide} />
                   ))}
                 </g>
               );
@@ -3121,9 +3149,24 @@
       );
     }
 
+    // Better/worse than WRIA, matching the .delta.good/.bad chips.
+    const DELTA_GOOD = '#2E8B6E', DELTA_BAD = '#C8553A';
+    // A share chart whose selection holds one category (usually the attribute just filtered on)
+    // is a single 100% bar. Say so in a line instead, keeping the WRIA share for context.
+    function KSingle({ name, wria }) {
+      return (
+        <div className="kchart" style={{ padding: '10px 2px', fontSize: 12, color: THEME.muted }}>
+          All selected acres are <b style={{ color: THEME.ink2 }}>{name}</b>
+          {wria != null && <> (<span className="num">{fmt1(wria)}%</span> of WRIA 1)</>}.
+        </div>
+      );
+    }
+    const isSingleShare = (rows, unit) => rows && rows.length === 1 && unit === '%' && rows[0].sel >= 99.95;
+
     function KHBars({ rows, color, unit = '%', max }) {
       const { tip, show, hide } = useTip();
       if (!rows || rows.length === 0) return <KEmpty />;
+      if (isSingleShare(rows, unit)) return <KSingle name={rows[0].key} wria={rows[0].wria} />;
       const rowH = 22, pt = 14, H = pt + rows.length * rowH + 22;
       const mx = max || Math.max(1, ...rows.map(r => Math.max(r.sel, r.wria || 0)));
       const top = mx <= 100 && mx > 50 ? 100 : Math.ceil(mx / 10) * 10 || 10;
@@ -3135,7 +3178,7 @@
             {rows.map((r, i) => {
               const y = pt + i * rowH, hasW = r.wria != null;
               return (
-                <g key={r.key} onMouseEnter={e => show(e, <><b>{r.key}</b><br />Selection <span className="num">{fmt1(r.sel)}{unit}</span>{hasW && <> · WRIA <span className="num">{fmt1(r.wria)}{unit}</span></>}{r.raw != null && <><br /><span className="num">{fmtAcres(r.raw)}</span> acres</>}</>)} onMouseLeave={hide}>
+                <g key={r.key} onMouseEnter={e => show(e, <><b>{r.key}</b><br />Selection <span className="num">{fmt1(r.sel)}{unit}</span>{hasW && <> · WRIA <span className="num">{fmt1(r.wria)}{unit}</span></>}{hasW && vsWria(r.sel, r.wria, { unit: unit === '%' ? ' pts' : unit })}{r.raw != null && <><br /><span className="num">{fmtAcres(r.raw)}</span> acres</>}</>)} onMouseLeave={hide}>
                   <CatLabel text={r.key} x={KPL - 10} y={y + 14} maxPx={KPL - 16} />
                   <rect className="hit" x={KPL} y={y + 4} width={Math.max(0, sc(r.sel) - KPL)} height={rowH - 8} rx={2} fill={color} />
                   {hasW && <circle cx={sc(r.wria)} cy={y + rowH / 2} r={4.5} fill="#fff" stroke={THEME.ghost} strokeWidth={1.75} />}
@@ -3152,6 +3195,7 @@
     function KVBars({ rows, color, unit = '%', max }) {
       const { tip, show, hide } = useTip();
       if (!rows || rows.length === 0) return <KEmpty height={170} />;
+      if (isSingleShare(rows, unit)) return <KSingle name={rows[0].key} wria={rows[0].wria} />;
       const H = 170, pl = 30, pb = 40, pt = 10, n = rows.length, bw = (KW - pl - 8) / n;
       const mx = max || Math.max(1, ...rows.map(r => Math.max(r.sel, r.wria || 0)));
       const top = mx <= 100 && mx > 50 ? 100 : Math.ceil(mx / 10) * 10 || 10;
@@ -3164,7 +3208,7 @@
               const x = pl + i * bw + bw * 0.22, w = bw * 0.56, hasW = r.wria != null;
               const f = fitLabel(r.key, bw - 6, 10.5);
               return (
-                <g key={r.key} onMouseEnter={e => show(e, <><b>{r.key}</b><br />Selection <span className="num">{fmt1(r.sel)}{unit}</span>{hasW && <> · WRIA <span className="num">{fmt1(r.wria)}{unit}</span></>}{r.raw != null && <><br /><span className="num">{fmtAcres(r.raw)}</span> acres</>}</>)} onMouseLeave={hide}>
+                <g key={r.key} onMouseEnter={e => show(e, <><b>{r.key}</b><br />Selection <span className="num">{fmt1(r.sel)}{unit}</span>{hasW && <> · WRIA <span className="num">{fmt1(r.wria)}{unit}</span></>}{hasW && vsWria(r.sel, r.wria, { unit: unit === '%' ? ' pts' : unit })}{r.raw != null && <><br /><span className="num">{fmtAcres(r.raw)}</span> acres</>}</>)} onMouseLeave={hide}>
                   {hasW && <rect className="ghost" x={x - 3} y={y(r.wria)} width={w + 6} height={Math.max(0, H - pb - y(r.wria))} rx={2} />}
                   <rect className="hit" x={x} y={y(r.sel)} width={w} height={Math.max(0, H - pb - y(r.sel))} rx={2} fill={color} />
                   <text className="cat" x={x + w / 2} y={H - pb + 14} textAnchor="middle"><title>{f.full}</title>{f.lines.map((l, k) => <tspan key={k} x={x + w / 2} dy={k ? 11 : 0}>{l}</tspan>)}</text>
@@ -3185,11 +3229,12 @@
           {tiles.map(t => {
             const d = t.wria == null ? null : t.sel - t.wria;
             return (
-              <div key={t.key} className="rtile" style={{ '--c': hue }} title={`${fmtAcres(t.acres)} acres · ${t.n.toLocaleString()} reaches`}>
+              <div key={t.key} className="rtile" style={{ '--c': hue }} title={`${fmtAcres(t.acres)} acres · ${t.n.toLocaleString()} banks`}>
                 <div className="k">{t.key}</div>
                 <div className="v">{fmt1(t.sel)}<small>% of acres</small></div>
                 <div className="w"><span>{d == null ? `${fmtAcres(t.acres)} acres` : <>WRIA <span className="num">{fmt1(t.wria)}%</span></>}</span>
-                  {d != null && <span className={`delta ${Math.abs(d) < 0.05 ? 'eq' : d > 0 ? 'dn' : ''}`}>{d > 0 ? '▲' : d < 0 ? '▼' : ''} {Math.abs(d).toFixed(1)}</span>}</div>
+                  {/* A higher impaired share than WRIA is worse (red); lower is better (green). */}
+                  {d != null && <span className={`delta ${Math.abs(d) < 0.05 ? 'eq' : d > 0 ? 'bad' : 'good'}`}>{d > 0 ? '▲' : d < 0 ? '▼' : ''} {Math.abs(d).toFixed(1)}</span>}</div>
               </div>
             );
           })}
@@ -3210,7 +3255,7 @@
             {rows.map((r, i) => {
               const a0 = (i - 0.5) * Math.PI / 4 + 0.04, a1 = (i + 0.5) * Math.PI / 4 - 0.04, la = i * Math.PI / 4;
               return (
-                <g key={r.key} onMouseEnter={e => show(e, <><b>{r.key}</b><br />Selection <span className="num">{fmt1(r.sel)}%</span>{r.wria != null && <> · WRIA <span className="num">{fmt1(r.wria)}%</span></>}</>)} onMouseLeave={hide}>
+                <g key={r.key} onMouseEnter={e => show(e, <><b>{r.key}</b><br />Selection <span className="num">{fmt1(r.sel)}%</span>{r.wria != null && <> · WRIA <span className="num">{fmt1(r.wria)}%</span></>}{vsWria(r.sel, r.wria, { unit: ' pts' })}</>)} onMouseLeave={hide}>
                   {r.wria > 0 && <path d={arc(rr(r.wria), a0, a1)} fill="none" stroke={THEME.ghost} strokeWidth={1.25} />}
                   {r.sel > 0 && <path className="hit" d={arc(rr(r.sel), a0, a1)} fill={color} fillOpacity={0.9} />}
                   <text className="cat" x={cx + (R + 14) * Math.sin(la)} y={cy - (R + 14) * Math.cos(la) + 4} textAnchor="middle">{r.key}</text>
@@ -3303,15 +3348,37 @@
         color: colorMap.get(r.key) || '#9ca3af', acres: r.acres,
       }));
       const light = isLightChipColor;
+      // WRIA share per category, for the "vs WRIA" part of each segment's hover text.
+      const wriaPct = new Map((wria || []).map(r => [r.key, wTotal ? r.acres / wTotal * 100 : 0]));
+      const selPct = new Map(sel.map(r => [r.key, total ? r.acres / total * 100 : 0]));
       const bar = (segs, h, ghost) => (
         <div ref={ghost ? undefined : barRef} style={{ display: 'flex', height: h, borderRadius: 3, overflow: 'hidden', gap: 2, background: ghost ? 'none' : THEME.line2 }}>
           {segs.map(s => ghost
-            ? <i key={s.key} style={{ display: 'block', width: `${s.pct}%`, border: `1px solid ${THEME.ghost}`, borderRadius: 2 }} title={`WRIA · ${display(s.key)}: ${s.pct.toFixed(1)}%`} />
-            : <i key={s.key} className={light(s.color) ? 'lt' : ''} title={`${display(s.key)}: ${fmtAcres(s.acres)} acres (${s.pct.toFixed(1)}%)`}
+            // Ghost segment: a pale tint of the category's own colour (not neutral grey), so
+            // each WRIA segment reads as the same category as the solid segment above it.
+            ? <i key={s.key} style={{ display: 'block', width: `${s.pct}%`, background: lerpHex(s.color, '#ffffff', 0.7),
+                  boxShadow: `inset 0 0 0 1px ${lerpHex(s.color, '#ffffff', 0.45)}`, borderRadius: 2 }}
+                title={`WRIA · ${display(s.key)}: ${s.pct.toFixed(1)}% of acres${selPct.has(s.key) ? ` · selection ${selPct.get(s.key).toFixed(1)}%` : ''}`} />
+            : <i key={s.key} className={light(s.color) ? 'lt' : ''}
+                title={`${display(s.key)}: ${fmtAcres(s.acres)} acres (${s.pct.toFixed(1)}%)${wria ? ` · WRIA ${(wriaPct.get(s.key) || 0).toFixed(1)}%${vsWriaText(s.pct, wriaPct.get(s.key) || 0, ' pts')}` : ''}`}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', font: '500 10.5px var(--font-m)',
                   color: light(s.color) ? THEME.ink : '#fff', background: s.color, width: `${s.pct}%`, overflow: 'hidden', whiteSpace: 'nowrap' }}>
                 {(() => { const t = `${display(s.key)} ${s.pct.toFixed(0)}%`; return labelFits(t, s.pct) ? t : ''; })()}
               </i>)}
+        </div>
+      );
+      // One category in the selection (the attribute just filtered on): a full-width 100% bar
+      // says nothing, so state it in a line with the category's WRIA share.
+      if (sel.length === 1) return (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12, fontWeight: 600, color: THEME.ink2, marginBottom: 4 }}>
+            <span>{title}</span><span className="num" style={{ fontWeight: 400, color: THEME.muted }}>{fmtAcres(total)} acres</span>
+          </div>
+          <div style={{ fontSize: 12, color: THEME.muted, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <i style={{ width: 10, height: 10, borderRadius: 2, background: colorMap.get(sel[0].key) }} />
+            All selected acres are <b style={{ color: THEME.ink2 }}>{display(sel[0].key)}</b>
+            {wria && <> (<span className="num">{(wriaPct.get(sel[0].key) || 0).toFixed(1)}%</span> of WRIA 1)</>}
+          </div>
         </div>
       );
       return (
@@ -3320,7 +3387,7 @@
             <span>{title}</span><span className="num" style={{ fontWeight: 400, color: THEME.muted }}>{fmtAcres(total)} acres</span>
           </div>
           {bar(seg(sel, total), 22, false)}
-          {wria && <div style={{ marginTop: 3 }}>{bar(seg(inSelOrder(wria), wTotal), 5, true)}</div>}
+          {wria && <div style={{ marginTop: 3 }}>{bar(seg(inSelOrder(wria), wTotal), 7, true)}</div>}
           <LegendRow style={{ marginTop: 5 }} items={seg(sel, total).filter(s => s.pct >= 1).map(s => ({ label: display(s.key), color: s.color }))} />
         </div>
       );
@@ -3538,11 +3605,11 @@
         // All matching rows for table + export (sorted)
         const compDescSql = `CASE
           WHEN mc IS NULL OR mc = 0 THEN '\u2014'
-          WHEN mc <= -0.5 THEN 'Strong Decid.'
-          WHEN mc <= -0.1 THEN 'Deciduous Dom.'
+          WHEN mc <= -0.5 THEN 'Strongly deciduous'
+          WHEN mc <= -0.1 THEN 'Mostly deciduous'
           WHEN mc < 0.1 THEN 'Mixed'
-          WHEN mc < 0.5 THEN 'Conifer Dom.'
-          ELSE 'Strong Conifer' END`;
+          WHEN mc < 0.5 THEN 'Mostly conifer'
+          ELSE 'Strongly conifer' END`;
         const dr = db.exec(
           `SELECT bid, gn, ROUND(rpsf * rpsa / 100.0, 1) AS ci,
                   tier, srz, ${compDescSql} AS compDesc, mc, mh, pf, ps, ph, sols, slps, wet, mgr,
@@ -3706,7 +3773,7 @@
         { key: 'ci', label: 'Composite Index', stack: ['Composite', 'Index'], term: 'ci', w: 68, num: true, fmt: v => v?.toFixed(1) },
         { key: 'tier', label: 'Tier', term: 'tier', w: 50, fmt: v => <TierPill tier={v} /> },
         { key: 'srz', label: 'Salmon Recovery Zone', w: 150, fmt: v => displaySrz(v) },
-        { key: 'compDesc', label: 'Composition', term: 'comp', w: 100, fmt: v => v },
+        { key: 'compDesc', label: 'Composition', term: 'comp', w: 124, fmt: v => v },
         { key: 'mh', label: 'Canopy height (ft)', stack: ['Canopy', 'height (ft)'], w: 66, num: true, fmt: v => v > 0 ? v?.toFixed(0) : '\u2014' },
         { key: 'pf', label: '% Forest', w: 60, num: true, fmt: v => v?.toFixed(0) },
         { key: 'sols', label: 'Solar push', term: 'push', w: 70, num: true, fmt: v => v?.toFixed(1) },
@@ -3779,7 +3846,7 @@
       // --- Loading / error ---
       if (bidLoading) return (
         <div className="flex items-center justify-center py-12">
-          <div className="text-gray-500">Loading BID Query data...</div>
+          <div className="text-gray-500">Loading Bank ID Query data...</div>
         </div>
       );
       if (!selTier) return null; // not initialized yet
@@ -3841,13 +3908,13 @@
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
             <h2 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>Find banks</h2>
-            <p style={{ margin: 0, color: THEME.muted, fontSize: 13 }}>Each row is one bank (BID). Filters combine with AND. Adjust, then Apply to update the map, the table, and Summary Stats.</p>
+            <p style={{ margin: 0, color: THEME.muted, fontSize: 13 }}>Each row is one stream bank, identified by its Bank ID (BID). Filters combine with AND. Adjust, then Apply to update the map, the table, and Summary Stats.</p>
           </div>
           <div className="bq">
             <aside className="card rail">
               <div className="applied">
                 <span className="lab">Applied</span>
-                {applied.length === 0 ? <Chip sel>All reaches</Chip>
+                {applied.length === 0 ? <Chip sel>All banks</Chip>
                   : applied.map(a => <Chip key={a.key} sel onClear={() => clearFilter(a.key)}>{a.label}</Chip>)}
               </div>
               <div className="scroll">
@@ -3857,9 +3924,9 @@
                     <DualRangeSlider label="Restoration Priority" term="rp" min={0} max={100} step={1} value={rRPF} onChange={setRRPF} fmt={v => v.toFixed(0)} />
                     <DualRangeSlider label="Area percentile" term="percentile" min={0} max={100} step={1} value={rRPA} onChange={setRRPA} fmt={v => v.toFixed(0)} />
                     <DualRangeSlider label="Composition" term="comp" min={-1} max={1} step={0.05} value={rComp} onChange={setRComp} fmt={v => v.toFixed(2)} />
-                    <DualRangeSlider label="Canopy height (ft)" min={0} max={300} step={5} value={rCH} onChange={setRCH} fmt={v => v.toFixed(0)} />
+                    <DualRangeSlider label="Canopy height (ft)" term="canopy" min={0} max={300} step={5} value={rCH} onChange={setRCH} fmt={v => v.toFixed(0)} />
                     <DualRangeSlider label="Composite Index" term="ci" min={0} max={100} step={1} value={rCI} onChange={setRCI} fmt={v => v.toFixed(0)} />
-                    <DualRangeSlider label="% Restorable" min={0} max={100} step={1} value={rRest} onChange={setRRest} fmt={v => v.toFixed(0)} />
+                    <DualRangeSlider label="% Restorable" term="restorable" min={0} max={100} step={1} value={rRest} onChange={setRRest} fmt={v => v.toFixed(0)} />
                     {moreRanges && <>
                       <DualRangeSlider label="% Forest" min={0} max={100} step={1} value={rPF} onChange={setRPF} fmt={v => v.toFixed(0)} />
                       <DualRangeSlider label="% Shrub" min={0} max={100} step={1} value={rPS} onChange={setRPS} fmt={v => v.toFixed(0)} />
@@ -3870,10 +3937,10 @@
                 </CollapsibleSection>
 
                 <CollapsibleSection title="Fish / Salmon" defaultOpen={false} badge={bidBadges.fishSalmon} hue={THEME.sections.fish.hue}>
-                  <FilterGroup title="Early Chinook" labels={labelSets.chk || []} attr="chk" selected={selChk} setSelected={setSelChk} display={v => ({ Y: 'Yes', N: 'No' })[v] || v} />
-                  <FilterGroup title="Fish access" labels={labelSets.fish || []} attr="fish" selected={selFish} setSelected={setSelFish} display={v => ({ fish: 'Fish-bearing', gradient: 'Gradient-accessible' })[v] || v} />
+                  <FilterGroup title="Early (spring) Chinook" labels={labelSets.chk || []} attr="chk" selected={selChk} setSelected={setSelChk} display={v => ({ Y: 'Yes', N: 'No' })[v] || v} />
+                  <FilterGroup title="Fish access" term="fish" labels={labelSets.fish || []} attr="fish" selected={selFish} setSelected={setSelFish} display={v => ({ fish: 'Fish-bearing', gradient: 'Gradient-accessible' })[v] || v} />
                   <FilterGroup title="Salmon present" labels={labelSets.sal || []} attr="sal" selected={selSal} setSelected={setSelSal} display={v => ({ Y: 'Yes', N: 'No' })[v] || v} />
-                  <FilterGroup title="Salmon species" labels={labelSets.species || []} attr="species" selected={selSpecies} setSelected={setSelSpecies} display={v => v === 'Pink (Odd Year)' ? 'Pink (odd year)' : v} />
+                  <FilterGroup title="Salmon species" labels={labelSets.species || []} attr="species" selected={selSpecies} setSelected={setSelSpecies} display={speciesLabel} />
                 </CollapsibleSection>
 
                 <CollapsibleSection title="Impairment" defaultOpen={false} badge={bidBadges.impairment} hue={THEME.sections.imp.hue}>
@@ -3892,7 +3959,7 @@
                   </div>
                   <FilterGroup title="Historic Migration Zone" term="zones" labels={labelSets.hmz || []} attr="hmz" selected={selHmz} setSelected={setSelHmz} display={v => ({ Y: 'Yes', N: 'No' })[v] || v} />
                   <FilterGroup title="Bankfull width class" term="bfw" labels={labelSets.bfw || []} attr="bfw" selected={selBfw} setSelected={setSelBfw} />
-                  <FilterGroup title="Waterbody type" labels={WT_LABELS} attr="wt" selected={selWT || new Set(WT_LABELS)} setSelected={setSelWT} />
+                  <FilterGroup title="Waterbody type" term="wt" labels={WT_LABELS} attr="wt" selected={selWT || new Set(WT_LABELS)} setSelected={setSelWT} />
                   {/* Chips keep the stored NF/MF/SF short forms to stay compact; everywhere else
                       shows the spelled-out displaySrz name. */}
                   <FilterGroup title="Salmon Recovery Zone" labels={labelSets.srz || []} attr="srz" selected={selSrz} setSelected={setSelSrz} />
@@ -3900,7 +3967,7 @@
                 </CollapsibleSection>
 
                 <CollapsibleSection title="Administrative" defaultOpen={false} badge={bidBadges.admin} hue={THEME.sections.adm.hue}>
-                  <FilterGroup title="Owner" labels={labelSets.mgr || []} attr="mgr" selected={selMgr} setSelected={setSelMgr} />
+                  <FilterGroup title="Owner" term="owner" labels={labelSets.mgr || []} attr="mgr" selected={selMgr} setSelected={setSelMgr} />
                   <FilterGroup title="Zoning" labels={labelSets.zon || []} attr="zon" selected={selZon} setSelected={setSelZon} />
                 </CollapsibleSection>
 
@@ -3974,7 +4041,7 @@
     // App Shell
     // ============================================================
     const TABS = [
-      { id: 'bid_query',     icon: 'search', label: 'BID Query' },
+      { id: 'bid_query',     icon: 'search', label: 'Bank ID Query' },
       { id: 'summary_stats', icon: 'bars',   label: 'Summary Stats' },
       { id: 'bank_explorer', icon: 'bank',   label: 'Bank Explorer' },
       { id: 'scoring_lab',   icon: 'lab',    label: 'Scoring Lab' },
@@ -4058,18 +4125,18 @@
       const lcRows = d.lc.filter(r => !zones || zones.size === 0 || zones.has(r.z)).map(r => ({ zone: ZONE_LABELS[r.z], lc: r.lc }));
       return (
         <ChartGrid>
-          <ChartCell title={<><Term id="rp">Restoration Priority</Term> distribution</>} story="Reaches per 5-point bin. Solid line: selection mean · dashed: WRIA mean.">
+          <ChartCell title={<><Term id="rp">Restoration Priority</Term> distribution</>} story="Banks per 5-point bin. Solid line: selection mean · dashed: WRIA mean.">
             <KHistogram sel={d.rpfHist} wria={w && w.rpfHist} color={S_REST.hue} meanSel={d.rpfMean} meanWria={w && w.rpfMean} />
           </ChartCell>
-          <ChartCell title={<><Term id="ci">Composite Index</Term> distribution</>} story="Reaches per 5-point bin. Solid line: selection mean · dashed: WRIA mean.">
+          <ChartCell title={<><Term id="ci">Composite Index</Term> distribution</>} story="Banks per 5-point bin. Solid line: selection mean · dashed: WRIA mean.">
             <KHistogram sel={d.ciHist} wria={w && w.ciHist} color={lerpHex(S_REST.hue, '#ffffff', 0.35)} meanSel={d.ciMean} meanWria={w && w.ciMean} />
           </ChartCell>
           <ChartCell title={showLc ? 'Landcover by buffer zone' : <><Term id="comp">Composition</Term> by <Term id="zones">buffer zone</Term>, by tier</>}
-            story={showLc ? 'Share of zone area in each of the nine landcover classes.' : 'Cell colour: conifer teal ← Forest green at 0 → deciduous brick, averaged by forest area. Zones with no forest show as a separate grey band, not as mixed. Bottom row is the WRIA baseline.'}
+            story={showLc ? 'Share of zone area in each of the nine landcover classes.' : 'Cell color: conifer teal ← Forest green at 0 → deciduous brick, averaged by forest area. Zones with no forest show as a separate grey band, not as mixed. HMZ is the Historic Migration Zone. Bottom row is the WRIA baseline.'}
             right={<span className="seg"><button className={showLc ? '' : 'on'} onClick={() => setShowLc(false)}>Composition</button><button className={showLc ? 'on' : ''} onClick={() => setShowLc(true)}>9-class landcover</button></span>}>
             {showLc ? <KLcStack rows={lcRows} /> : <KHeatmap rows={heat.rows} cols={heat.cols} mode="div" />}
           </ChartCell>
-          <ChartCell title={<>Mean <Term id="rp">Restoration Priority</Term> by <Term id="tier">tier</Term></>} story="Filled dot: selection · hollow: WRIA · bar shows the gap. Composite Index in the hover.">
+          <ChartCell title={<>Mean <Term id="rp">Restoration Priority</Term> by <Term id="tier">tier</Term></>} story="Filled dot: selection · hollow: WRIA · the bar is the gap: red where the selection has more restoration need than WRIA, green where it has less. Composite Index in the hover.">
             <KDumbbell rows={toDumbbell(tierRows, w && w.tier)} color={S_REST.hue} attr="tier" />
           </ChartCell>
         </ChartGrid>
@@ -4095,7 +4162,7 @@
       const pct = (rows, tot) => new Map(rows.map(s => [s.species, s.acres * S.SQFT_PER_ACRE / tot * 100]));
       const sp = pct(d.species, d.totalSqft), wsp = w && pct(w.species, w.totalSqft);
       // Display-only remap (DB value 'Pink (Odd Year)' must stay as-is - a LIKE match depends on it).
-      const spRows = [...sp.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ key: k === 'Pink (Odd Year)' ? 'Pink (odd year)' : k, sel: v, wria: wsp ? wsp.get(k) : null, raw: d.species.find(s => s.species === k).acres }));
+      const spRows = [...sp.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ key: speciesLabel(k), sel: v, wria: wsp ? wsp.get(k) : null, raw: d.species.find(s => s.species === k).acres }));
       const fishDisplay = r => ({ ...r, key: r.key === 'fish' ? 'Fish-bearing' : r.key === 'gradient' ? 'Gradient-accessible' : r.key });
       const comp = toHeat(d.compSal, w && w.compAll, 'comp', zones), ht = toHeat(d.compSal, w && w.compAll, 'cht', zones);
       return (
@@ -4157,9 +4224,6 @@
     }
 
     // --- 4: River Context ---
-    // Ascending channel width. Mainstem is the widest class, confirmed against the source
-    // methods; an earlier draft had it before Large Stream.
-    const BFW_ORDER = ['Headwater/Ditch', 'Small Stream', 'Medium Stream', 'Large Stream', 'Mainstem'];
     function StatsSectionRiver({ db, where, isAll, zones }) {
       const S = window.__stats;
       const d = React.useMemo(() => ({
@@ -4181,7 +4245,7 @@
           <ChartCell title={<>Mean <Term id="rp">Restoration Priority</Term> by stream size</>}>
             <KDumbbell rows={toDumbbell(byOrder(d.bfw), w && byOrder(w.bfw))} color={S_RIV.hue} attr="bfw" />
           </ChartCell>
-          <ChartCell title={<><Term id="comp">Composition</Term> by buffer zone, by Salmon Recovery Zone</>} story="Twelve zones read as a grid; lines could not.">
+          <ChartCell title={<><Term id="comp">Composition</Term> by buffer zone, by Salmon Recovery Zone</>} story="Same ramp as Restoration Metrics, weighted by forest area. Bottom row is the WRIA baseline.">
             <KHeatmap rows={comp.rows} cols={comp.cols} mode="div" />
           </ChartCell>
           <ChartCell title={<>Mean <Term id="rp">Restoration Priority</Term> by Salmon Recovery Zone</>} story={w ? 'Sorted by gap to WRIA, largest first.' : undefined}>
@@ -4290,7 +4354,7 @@
       const band = rows => [...rows].sort((a, b) => a.key.localeCompare(b.key)).map(r => ({ ...r, key: SOLAR_BAND_LABELS[+r.key.slice(1) - 1] || r.key }));
       return (
         <ChartGrid>
-          <ChartCell title={<><Term id="push">Solar push</Term> distribution</>} story="Reaches per 0.5-point bin. Solid line: selection mean · dashed: WRIA mean.">
+          <ChartCell title={<><Term id="push">Solar push</Term> distribution</>} story="Banks per 0.5-point bin. Solid line: selection mean · dashed: WRIA mean.">
             <KHistogram sel={d.solHist} wria={w && w.solHist} color={S_MOD.hue} meanSel={d.solMean} meanWria={w && w.solMean} xMin={0} xMax={12} fmt={v => v.toFixed(v % 1 ? 1 : 0)} />
           </ChartCell>
           <ChartCell title="Share of selected acres by aspect" story="Compass rose. Bank aspect is a circular mean of the sloped cells in each bank, so opposite banks of a reach can face opposite ways.">
@@ -4379,23 +4443,27 @@
 
       const k = sel.kpis, wk = wria.kpis;
       const applied = summarizeFilters(appliedFilters, appliedFilters && appliedFilters._labels);
-      const Delta = ({ a, b, pctOf }) => {
+      // higherIs: 'bad' where a higher value means worse riparian condition (Restoration
+      // Priority, Composite Index), so the arrow is coloured red/green; omit for neutral measures.
+      const Delta = ({ a, b, pctOf, higherIs }) => {
         if (a == null || b == null) return null;   // no mean to compare (zero-match selection)
         if (pctOf) return <span className="delta eq">{(a / b * 100).toFixed(0)}% of all</span>;
         const d = a - b; if (isAll || Math.abs(d) < 0.05) return <span className="delta eq">= WRIA</span>;
-        return <span className={`delta ${d < 0 ? 'dn' : ''}`}>{d > 0 ? '▲' : '▼'} {Math.abs(d).toFixed(1)}</span>;
+        const cls = higherIs === 'bad' ? (d > 0 ? 'bad' : 'good') : '';
+        const tip = higherIs === 'bad' ? (d > 0 ? 'More restoration need than WRIA as a whole' : 'Less restoration need than WRIA as a whole') : undefined;
+        return <span className={`delta ${cls}`} title={tip}>{d > 0 ? '▲' : '▼'} {Math.abs(d).toFixed(1)}</span>;
       };
       const Kpi = ({ label, value, wriaValue, delta }) => (
         <div className="card kpi"><div className="k">{label}</div><div className="v">{value}</div>
           <div className="w"><span>WRIA <span className="num">{wriaValue}</span></span>{delta}</div></div>
       );
       const sections = [
-        ['Restoration Metrics', 'bars', S_REST, '4 charts', true, <StatsSectionRestoration db={db} where={where} isAll={isAll} zones={zones} />],
-        ['Fish / Salmon', 'fish', S_FISH, '4 charts', false, <StatsSectionFish db={db} where={where} isAll={isAll} zones={zones} />],
-        ['Impairment', 'warn', S_IMP, '3 tiles · 3 charts', false, <StatsSectionImpairment db={db} where={where} isAll={isAll} zones={zones} />],
-        ['River Context', 'river', S_RIV, '4 charts', false, <StatsSectionRiver db={db} where={where} isAll={isAll} zones={zones} />],
-        ['Administrative', 'building', S_ADM, 'Owner · zoning · 4 charts', false, <StatsSectionAdmin db={db} where={where} isAll={isAll} zones={zones} />],
-        ['Site Modifiers', 'sun', S_MOD, 'Solar · slope · wetland pushes', false, <StatsSectionModifiers db={db} where={where} isAll={isAll} />],
+        ['Restoration Metrics', 'bars', S_REST, 'Condition scores, tiers and forest composition', true, <StatsSectionRestoration db={db} where={where} isAll={isAll} zones={zones} />],
+        ['Fish / Salmon', 'fish', S_FISH, 'Fish use, species, and how condition differs', false, <StatsSectionFish db={db} where={where} isAll={isAll} zones={zones} />],
+        ['Impairment', 'warn', S_IMP, 'Water quality listings and condition on listed reaches', false, <StatsSectionImpairment db={db} where={where} isAll={isAll} zones={zones} />],
+        ['River Context', 'river', S_RIV, 'Stream size and Salmon Recovery Zones', false, <StatsSectionRiver db={db} where={where} isAll={isAll} zones={zones} />],
+        ['Administrative', 'building', S_ADM, 'Who manages the land and how it is zoned', false, <StatsSectionAdmin db={db} where={where} isAll={isAll} zones={zones} />],
+        ['Site Modifiers', 'sun', S_MOD, 'Solar, slope and wetland adjustments', false, <StatsSectionModifiers db={db} where={where} isAll={isAll} />],
       ];
       return (
         <div>
@@ -4407,20 +4475,20 @@
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '10px 14px', borderBottom: `1px solid ${THEME.line2}` }}>
               <span style={{ fontSize: 11, color: THEME.muted, marginRight: 2 }}>Comparing</span>
               {applied.length === 0
-                ? <Chip sel>All reaches</Chip>
+                ? <Chip sel>All banks</Chip>
                 : applied.map(a => <Chip key={a.key} sel>{a.label}</Chip>)}
-              <a href="#" onClick={e => { e.preventDefault(); onEditFilters && onEditFilters(); }} style={{ fontSize: 12, marginLeft: 6, color: THEME.accentInk }}>Edit on BID Query ›</a>
+              <a href="#" onClick={e => { e.preventDefault(); onEditFilters && onEditFilters(); }} style={{ fontSize: 12, marginLeft: 6, color: THEME.accentInk }}>Edit on Bank ID Query ›</a>
               <LegendRow style={{ marginLeft: 'auto' }} items={[{ label: 'Selection', color: THEME.ink }, { label: 'WRIA baseline', hollow: true }]} />
             </div>
             <div className="card-b">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 12 }}>
-                <Kpi label="Reaches selected" value={k.n.toLocaleString()} wriaValue={wk.n.toLocaleString()} delta={<Delta a={k.n} b={wk.n} pctOf />} />
+                <Kpi label="Banks selected" value={k.n.toLocaleString()} wriaValue={wk.n.toLocaleString()} delta={<Delta a={k.n} b={wk.n} pctOf />} />
                 <Kpi label="Riparian acres" value={fmtAcres(k.acres)} wriaValue={fmtAcres(wk.acres)} delta={<Delta a={k.acres} b={wk.acres} pctOf />} />
-                <Kpi label={<>Mean <Term id="rp">Restoration Priority</Term></>} value={k.rpf == null ? '—' : k.rpf.toFixed(1)} wriaValue={wk.rpf == null ? '—' : wk.rpf.toFixed(1)} delta={<Delta a={k.rpf} b={wk.rpf} />} />
-                <Kpi label={<>Mean <Term id="ci">Composite Index</Term></>} value={k.ci == null ? '—' : k.ci.toFixed(1)} wriaValue={wk.ci == null ? '—' : wk.ci.toFixed(1)} delta={<Delta a={k.ci} b={wk.ci} />} />
+                <Kpi label={<>Mean <Term id="rp">Restoration Priority</Term></>} value={k.rpf == null ? '—' : k.rpf.toFixed(1)} wriaValue={wk.rpf == null ? '—' : wk.rpf.toFixed(1)} delta={<Delta a={k.rpf} b={wk.rpf} higherIs="bad" />} />
+                <Kpi label={<>Mean <Term id="ci">Composite Index</Term></>} value={k.ci == null ? '—' : k.ci.toFixed(1)} wriaValue={wk.ci == null ? '—' : wk.ci.toFixed(1)} delta={<Delta a={k.ci} b={wk.ci} higherIs="bad" />} />
                 <Kpi label={<>Mean <Term id="percentile">area percentile</Term></>} value={k.rpsa == null ? '—' : k.rpsa.toFixed(1)} wriaValue={wk.rpsa == null ? '—' : wk.rpsa.toFixed(1)} delta={<Delta a={k.rpsa} b={wk.rpsa} />} />
               </div>
-              {isAll && <div className="note" style={{ marginTop: 12 }}>Showing all reaches. Run a query on the BID Query tab to compare a subset against the WRIA average.</div>}
+              {isAll && <div className="note" style={{ marginTop: 12 }}>Showing all banks. Run a query on the Bank ID Query tab to compare a subset against the WRIA average.</div>}
               <div className="eyebrow" style={{ margin: '18px 0 10px' }}>Selected acres by group</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: '12px 28px' }}>
                 <div>
@@ -4431,7 +4499,7 @@
                     const pct = totalN ? (p5n / totalN * 100) : 0;
                     return (
                       <p style={{ fontSize: 11, color: THEME.muted, margin: '4px 0 0' }}>
-                        {p5n.toLocaleString()} reaches ({pct.toFixed(0)}%) are capped at P5 by fish access rather than by riparian condition.
+                        Across WRIA 1, {p5n.toLocaleString()} banks ({pct.toFixed(0)}%) are capped at P5 by fish access rather than by riparian condition.
                       </p>
                     );
                   })()}
@@ -4540,7 +4608,7 @@
             <div style={{ maxWidth: 1320, margin: '0 auto', padding: '14px 20px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
                 <h1 style={{ fontSize: 21, fontWeight: 700, letterSpacing: '-.01em', margin: 0 }}>
-                  WRIA 1 <span style={{ color: THEME.accent, fontWeight: 600 }}>Riparian Restoration Prioritization</span>
+                  <Term id="wria1">WRIA 1</Term> <span style={{ color: THEME.accent, fontWeight: 600 }}>Riparian Restoration Prioritization</span>
                 </h1>
                 <div style={{ fontSize: 12, color: THEME.muted }}>
                   Data <b style={{ color: THEME.ink2, fontWeight: 500 }}>May 2026 scoring run</b>
@@ -4576,7 +4644,6 @@
             <span>WRIA 1 Riparian Restoration Prioritization · Data <b style={{ color: THEME.ink2, fontWeight: 500 }}>May 2026 scoring run</b>
               {scored && <> · <b className="num" style={{ color: THEME.ink2, fontWeight: 500 }}>{scored.n.toLocaleString()}</b> banks · <b className="num" style={{ color: THEME.ink2, fontWeight: 500 }}>{Math.round(scored.acres).toLocaleString()}</b> riparian acres</>}
             </span>
-            <span style={{ flexBasis: '100%' }}>Kept short for space: <b style={{ color: THEME.ink2, fontWeight: 500 }}>WRIA</b> Water Resource Inventory Area · <b style={{ color: THEME.ink2, fontWeight: 500 }}>BID</b> bank identifier · <b style={{ color: THEME.ink2, fontWeight: 500 }}>HMZ</b> Historic Migration Zone (buffer zone axes only)</span>
           </footer>
         </div>
       );
