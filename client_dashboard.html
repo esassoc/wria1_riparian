@@ -2530,6 +2530,8 @@
       const presets = [
         ['Nooksack mainstem + forks', streams.named.filter(s => /Nooksack River$/.test(s.name)).map(s => s.name)],
         ['10 longest', streams.named.slice(0, 10).map(s => s.name)],
+        // Every GNIS-named stream and lake; leaves out the unnamed reaches.
+        ['All named streams', streams.named.map(s => s.name)],
       ];
       const Row = ({ v, label, mi, tip }) => {
         const on = selected.has(v);
@@ -2553,7 +2555,11 @@
           </div>
           {selected.size > 0 && (
             <div className="chips" style={{ marginBottom: 6 }}>
-              {[...selected].map(v => <Chip key={v} on color={hue} onClear={() => toggle(v)}>{gnLabel(v)}</Chip>)}
+              {/* Past 8 picks (e.g. "All named streams") one summary chip replaces the chip wall;
+                  individual picks stay visible as ticked rows in the list below. */}
+              {selected.size > 8
+                ? <Chip on color={hue} onClear={() => setSelected(new Set())}>{selected.size} streams selected</Chip>
+                : [...selected].map(v => <Chip key={v} on color={hue} onClear={() => toggle(v)}>{gnLabel(v)}</Chip>)}
             </div>
           )}
           <div className="chips" style={{ marginBottom: 6 }}>

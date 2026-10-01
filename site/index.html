@@ -2511,7 +2511,9 @@ function StreamPicker({ db, selected, setSelected }) {
   const addAll = (names) => setSelected(new Set([...selected, ...names]));
   const presets = [
   ['Nooksack mainstem + forks', streams.named.filter((s) => /Nooksack River$/.test(s.name)).map((s) => s.name)],
-  ['10 longest', streams.named.slice(0, 10).map((s) => s.name)]];
+  ['10 longest', streams.named.slice(0, 10).map((s) => s.name)],
+
+  ['All named streams', streams.named.map((s) => s.name)]];
 
   const Row = ({ v, label, mi, tip }) => {
     const on = selected.has(v);
@@ -2535,6 +2537,10 @@ function StreamPicker({ db, selected, setSelected }) {
     ),
     selected.size > 0 &&
     React.createElement("div", { className: "chips", style: { marginBottom: 6 } },
+
+
+    selected.size > 8 ?
+    React.createElement(Chip, { on: true, color: hue, onClear: () => setSelected(new Set()) }, selected.size, " streams selected") :
     [...selected].map((v) => React.createElement(Chip, { key: v, on: true, color: hue, onClear: () => toggle(v) }, gnLabel(v)))
     ),
 
