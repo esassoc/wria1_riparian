@@ -228,7 +228,7 @@
       PieChart, Pie, Cell, ResponsiveContainer, ReferenceLine,
       ComposedChart, Area, AreaChart, Line, LineChart,
       RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-      ScatterChart, Scatter, ZAxis, Treemap, LabelList
+      Treemap, LabelList
     } = Recharts;
 
     // ---- Data loading ---------------------------------------------------------------
@@ -3149,6 +3149,63 @@
       );
     }
 
+    // Bank location map on a <canvas>. The earlier Recharts scatter drew one SVG node per bank
+    // (30,850 at full extent), which froze the page for 2-5 s on every Apply, Reset and tab
+    // return. Canvas paints the same points in a few ms. `buckets` are drawn in array order,
+    // so the last bucket lands on top (tier mode passes P5 -> P1).
+    // ponytail: linear nearest-point scan on hover (~30k distance checks per frame, throttled to
+    // one per animation frame); add a grid index if point counts grow by an order of magnitude.
+    function CanvasMap({ buckets, extent, height = 360 }) {
+      const wrapRef = React.useRef(null), canvasRef = React.useRef(null), frame = React.useRef(0);
+      const [width, setWidth] = React.useState(0);
+      const [tip, setTip] = React.useState(null);
+      const M = { l: 10, r: 10, t: 5, b: 5 }, R = 1.7;
+      React.useEffect(() => {
+        const el = wrapRef.current;
+        if (!el || typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(e => setWidth(e[0].contentRect.width));
+        ro.observe(el);
+        return () => ro.disconnect();
+      }, []);
+      const px = x => M.l + (width - M.l - M.r) * (x - extent.xMin) / (extent.xMax - extent.xMin);
+      const py = y => M.t + (height - M.t - M.b) * (1 - (y - extent.yMin) / (extent.yMax - extent.yMin));
+      React.useEffect(() => {
+        const cv = canvasRef.current;
+        if (!cv || !width) return;   // hidden tab: width 0, redrawn when shown
+        const dpr = window.devicePixelRatio || 1;
+        cv.width = Math.round(width * dpr); cv.height = Math.round(height * dpr);
+        const ctx = cv.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        ctx.globalAlpha = 0.8;
+        for (const bk of buckets) {
+          ctx.fillStyle = bk.fill;
+          ctx.beginPath();
+          for (const p of bk.points) { const x = px(p.x), y = py(p.y); ctx.moveTo(x + R, y); ctx.arc(x, y, R, 0, Math.PI * 2); }
+          ctx.fill();
+        }
+      }, [buckets, extent, width, height]);
+      const onMove = e => {
+        const r = e.currentTarget.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+        cancelAnimationFrame(frame.current);
+        frame.current = requestAnimationFrame(() => {
+          let best = null, bd = 36;   // within 6 px
+          // Top bucket first, so a P1 dot wins over a P5 dot under the cursor.
+          for (let i = buckets.length - 1; i >= 0; i--) for (const p of buckets[i].points) {
+            const d = (px(p.x) - mx) ** 2 + (py(p.y) - my) ** 2;
+            if (d < bd) { bd = d; best = p; }
+          }
+          setTip(best ? { x: mx + 12, y: my - 8, p: best } : null);
+        });
+      };
+      return (
+        <div ref={wrapRef} style={{ position: 'relative', height }} onMouseMove={onMove} onMouseLeave={() => { cancelAnimationFrame(frame.current); setTip(null); }}>
+          <canvas ref={canvasRef} style={{ width: '100%', height, display: 'block' }} aria-label="Map of bank locations" role="img" />
+          {tip && <div className="tip" style={{ left: tip.x, top: tip.y }}><b className="num">{tip.p.bid}</b><br />Restoration Priority <span className="num">{tip.p.rp}</span> · {tip.p.tier}</div>}
+        </div>
+      );
+    }
+
     // Better/worse than WRIA, matching the .delta.good/.bad chips.
     const DELTA_GOOD = '#2E8B6E', DELTA_BAD = '#C8553A';
     // A share chart whose selection holds one category (usually the attribute just filtered on)
@@ -3750,15 +3807,31 @@
         setAppliedFilters(defaultFilters(labelSets));
       };
 
+      // Draft setter for every applied-filter key.
+      const setters = { selTier: setSelTier, selChk: setSelChk, selFish: setSelFish, selSrz: setSelSrz, selMgr: setSelMgr,
+        selZon: setSelZon, selBfw: setSelBfw, selHmz: setSelHmz, selSal: setSelSal, selSpecies: setSelSpecies,
+        selTcat: setSelTcat, selFcat: setSelFcat, selScat: setSelScat, selWT: setSelWT, selBufZone: setSelBufZone,
+        selGn: setSelGn,
+        rRPF: setRRPF, rRPA: setRRPA, rComp: setRComp, rCH: setRCH, rSol: setRSol, rSlp: setRSlp, rWet: setRWet,
+        rPF: setRPF, rPS: setRPS, rPH: setRPH, rRest: setRRest, rCI: setRCI };
+
+      // The panel stays mounted across tab switches (App hides it), so unapplied edits survive a
+      // trip to another tab. The flip side: a filter applied from outside (a #srz/ #stream/ link)
+      // must be pulled into the draft here. Panel-side applies (Apply, Reset, chip clear) already
+      // leave draft == applied, so re-syncing after them changes nothing.
+      const syncedRef = React.useRef(appliedFilters);
+      React.useEffect(() => {
+        if (!appliedFilters || appliedFilters === syncedRef.current) return;
+        syncedRef.current = appliedFilters;
+        Object.entries(setters).forEach(([k, set]) => {
+          const v = appliedFilters[k];
+          if (v != null) set(Array.isArray(v) ? [...v] : new Set(v));
+        });
+      }, [appliedFilters]);
+
       // Clear one filter from the Applied row: reset its draft field and apply immediately.
       const clearFilter = (key) => {
         const d = defaultFilters(labelSets);
-        const setters = { selTier: setSelTier, selChk: setSelChk, selFish: setSelFish, selSrz: setSelSrz, selMgr: setSelMgr,
-          selZon: setSelZon, selBfw: setSelBfw, selHmz: setSelHmz, selSal: setSelSal, selSpecies: setSelSpecies,
-          selTcat: setSelTcat, selFcat: setSelFcat, selScat: setSelScat, selWT: setSelWT, selBufZone: setSelBufZone,
-          selGn: setSelGn,
-          rRPF: setRRPF, rRPA: setRRPA, rComp: setRComp, rCH: setRCH, rSol: setRSol, rSlp: setRSlp, rWet: setRWet,
-          rPF: setRPF, rPS: setRPS, rPH: setRPH, rRest: setRRest, rCI: setRCI };
         if (setters[key]) setters[key](d[key]);
         setAppliedFilters(prev => ({ ...prev, [key]: d[key] }));
       };
@@ -3787,8 +3860,8 @@
         else { setSortCol(col); setSortAsc(col === 'bid' || col === 'gn' || col === 'srz' || col === 'mgr'); }
       };
 
-      // Points bucketed for Recharts: by tier (canonical colours) or by RP decile (sequential ramp).
-      // Recharts paints series in array order, so the last one lands on top: tiers go P5 -> P1
+      // Points bucketed for the map: by tier (canonical colours) or by RP decile (sequential ramp).
+      // CanvasMap paints buckets in array order, so the last one lands on top: tiers go P5 -> P1
       // (a P1 dot is never hidden under a lower tier), deciles low -> high.
       const mapBuckets = React.useMemo(() => {
         if (mapMode === 'tier') {
@@ -3820,25 +3893,7 @@
             </div>
           </div>
           <div style={{ background: `linear-gradient(180deg, #F6F7F4, #EEF1EE)`, borderRadius: '0 0 6px 6px' }}>
-            <ResponsiveContainer width="100%" height={360}>
-              <ScatterChart margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
-                <XAxis type="number" dataKey="x" domain={[extent.xMin, extent.xMax]} tick={false} axisLine={false} tickLine={false} />
-                <YAxis type="number" dataKey="y" domain={[extent.yMin, extent.yMax]} tick={false} axisLine={false} tickLine={false} />
-                <ZAxis range={[5, 5]} />
-                <Tooltip content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0]?.payload;
-                  return (
-                    <div className="tip" style={{ position: 'static' }}>
-                      <b className="num">{d?.bid}</b><br />Restoration Priority <span className="num">{d?.rp}</span> · {d?.tier}
-                    </div>
-                  );
-                }} />
-                {mapBuckets.map((bk, i) => (
-                  <Scatter key={bk.name} name={bk.name} data={bk.points} fill={bk.fill} fillOpacity={0.8} isAnimationActive={false} />
-                ))}
-              </ScatterChart>
-            </ResponsiveContainer>
+            <CanvasMap buckets={mapBuckets} extent={extent} height={360} />
           </div>
         </div>
       ), [mapBuckets, mapPointCount, extent, mapMode]);
@@ -4633,7 +4688,10 @@
           </header>
 
           <main style={{ maxWidth: 1320, margin: '0 auto', padding: '18px 20px 40px' }}>
-            {activeTab === 'bid_query' && <BIDQueryPanel data={data} sharedBidData={sharedBidData} appliedFilters={appliedFilters} setAppliedFilters={setAppliedFilters} onEditFilters={() => setActiveTab('bid_query')} />}
+            {/* Kept mounted and hidden, not unmounted, so unapplied filter edits survive tab switches. */}
+            <div style={{ display: activeTab === 'bid_query' ? undefined : 'none' }}>
+              <BIDQueryPanel data={data} sharedBidData={sharedBidData} appliedFilters={appliedFilters} setAppliedFilters={setAppliedFilters} onEditFilters={() => setActiveTab('bid_query')} />
+            </div>
             {activeTab === 'summary_stats' && <SummaryStatsPanel data={data} sharedBidData={sharedBidData} appliedFilters={appliedFilters} onEditFilters={() => setActiveTab('bid_query')} />}
             {activeTab === 'bank_explorer' && <BankExplorerPanel data={data} sharedBidData={sharedBidData} pendingBID={pendingBID} setPendingBID={setPendingBID} onBIDSelect={(bid) => updateHash('bank_explorer', bid)} />}
             {activeTab === 'scoring_lab' && <ScoringLabPanel data={data} />}
