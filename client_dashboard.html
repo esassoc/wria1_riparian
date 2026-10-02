@@ -10,6 +10,7 @@
     Deep link to Summary Stats with a filter applied: append #srz/<zone>, #zoning/<group>,
     #bfw/<size class> or #stream/<GNIS name> (values URL-encoded). Pairs chain:
     #stream/Anderson%20Creek/srz/Lower%20Mainstem%20Nooksack.
+    Deep link to the Scoring Lab tab: append #lab.
   -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -4589,7 +4590,7 @@
       const hashBidMatch = initHash.match(/^#bid\/(.+)/);
       const initLink = parseStatsLink(initHash);
       const [activeTab, setActiveTab] = React.useState(
-        hashBidMatch ? 'bank_explorer' : initLink ? 'summary_stats' : 'bid_query');
+        hashBidMatch ? 'bank_explorer' : initLink ? 'summary_stats' : initHash === '#lab' ? 'scoring_lab' : 'bid_query');
       const [pendingBID, setPendingBID] = React.useState(hashBidMatch ? hashBidMatch[1] : null);
       const [pendingLink, setPendingLink] = React.useState(initLink);
 
@@ -4610,6 +4611,7 @@
             setActiveTab('bank_explorer');
             setPendingBID(m[1]);
           }
+          if (window.location.hash === '#lab') setActiveTab('scoring_lab');
           const link = parseStatsLink(window.location.hash);
           if (link) setPendingLink(link);
         };
