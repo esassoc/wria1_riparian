@@ -316,8 +316,8 @@ const TIER_COLORS = { P1: '#8E2440', P2: '#D2623A', P3: '#DDAA3E', P4: '#2F6FA8'
 const TIER_LIGHT = new Set(['P3', 'P5']);
 const TIER_LABELS = {
   P1: 'P1: Spring Chinook habitat in the Nooksack that is also 303(d) temperature-listed',
-  P2: 'P2: Spring Chinook habitat in the Nooksack without temperature listing, or other fish-bearing water that is temperature-listed',
-  P3: 'P3: Fish-bearing in the Nooksack without Spring Chinook or temperature listing, or fish-bearing elsewhere in WRIA 1 that is temperature-listed',
+  P2: 'P2: Spring Chinook habitat in the Nooksack without temperature listing, or other fish-bearing water anywhere in WRIA 1 that is temperature-listed',
+  P3: 'P3: Fish-bearing in the Nooksack without Spring Chinook or temperature listing',
   P4: 'P4: Fish-bearing outside the Nooksack, not temperature-listed',
   P5: 'P5: No fish access - capped here by access, not by riparian condition'
 };
@@ -417,7 +417,7 @@ const TERMS = {
   owner: 'Owner: land manager from the USGS Protected Areas Database of the United States (PAD-US). Private/Unknown is land not listed in PAD-US, which is mostly private.',
   restorable: '% Restorable: the share of the bank\'s area in forest, shrub, or herbaceous/bare ground, the land that can carry riparian vegetation. Impervious surface, water, gravel bars and abandoned channel, and railway are excluded. A low value means much of the bank is developed or open water, so there is less ground to plant even if the score is high.',
   wria: 'The WRIA baseline is every scored bank in WRIA 1 (30,850). It is the comparison behind every chart on this page.',
-  tier: 'Priority tier combines four signals: Spring Chinook presence, location within the Nooksack, 303(d) temperature listing, and fish access. Among fish-bearing reaches, P1 through P4 rank by how many of the Chinook, Nooksack and temperature signals apply. Reaches without fish access are capped at P5 by access, not by riparian condition - a pristine reach above a barrier and a bare one both land in P5.'
+  tier: 'Priority tier combines four signals: Spring Chinook presence, location within the Nooksack, 303(d) temperature listing, and fish access. Among fish-bearing reaches, Spring Chinook habitat in the Nooksack is P1 if temperature-listed and P2 if not; any other temperature-listed reach is P2; the rest are P3 inside the Nooksack and P4 outside. Reaches without fish access are capped at P5 by access, not by riparian condition - a pristine reach above a barrier and a bare one both land in P5.'
 };
 
 
@@ -2052,7 +2052,7 @@ function BankExplorerPanel({ data, sharedBidData, pendingBID, setPendingBID, onB
       const tierDesc = {
         P1: 'Early Chinook + Nooksack + temperature-impaired',
         P2: isChin && isNook ? 'Early Chinook + Nooksack (no temperature impairment)' : 'Fish-bearing + temperature-impaired (no Early Chinook)',
-        P3: isFish && isNook ? 'Fish-bearing + Nooksack (no Early Chinook, no temperature impairment)' : 'Fish-bearing + non-Nooksack, temperature-impaired',
+        P3: 'Fish-bearing + Nooksack (no Early Chinook, no temperature impairment)',
         P4: 'Fish-bearing + non-Nooksack (no temperature impairment)',
         P5: 'Gradient-accessible only'
       };
