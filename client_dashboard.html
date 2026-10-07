@@ -577,7 +577,7 @@
     const LegendRow = ({ items, style, className }) => (
       <span className={className ? `legend ${className}` : 'legend'} style={style}>
         {items.map(it => (
-          <span key={it.label}>
+          <span key={it.label} title={it.title}>
             <i className={it.hollow ? 'hollow' : it.dash ? 'dash' : it.solid ? 'solid' : (it.texture || '')}
                style={it.color ? { '--c': it.color } : undefined} />
             {it.label}
@@ -3362,7 +3362,8 @@
       );
     }
 
-    function AcreStackBar({ sel, wria, title, attr, display = v => v }) {
+    // `legend` is an optional shorter name for the legend and in-segment labels; hovers keep `display`.
+    function AcreStackBar({ sel, wria, title, attr, display = v => v, legend = display }) {
       // In-segment labels are shown only when the whole label fits inside its segment;
       // otherwise the segment stays unlabelled and the legend + hover carry the name.
       // The bar is fluid, so the segment's pixel width is measured, not assumed.
@@ -3421,7 +3422,7 @@
                 title={`${display(s.key)}: ${fmtAcres(s.acres)} acres (${s.pct.toFixed(1)}%)${wria ? ` · WRIA ${(wriaPct.get(s.key) || 0).toFixed(1)}%${vsWriaText(s.pct, wriaPct.get(s.key) || 0, ' pts')}` : ''}`}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', font: '500 10.5px var(--font-m)',
                   color: light(s.color) ? THEME.ink : '#fff', background: s.color, width: `${s.pct}%`, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                {(() => { const t = `${display(s.key)} ${s.pct.toFixed(0)}%`; return labelFits(t, s.pct) ? t : ''; })()}
+                {(() => { const t = `${legend(s.key)} ${s.pct.toFixed(0)}%`; return labelFits(t, s.pct) ? t : ''; })()}
               </i>)}
         </div>
       );
@@ -3446,7 +3447,7 @@
           </div>
           {bar(seg(sel, total), 22, false)}
           {wria && <div style={{ marginTop: 3 }}>{bar(seg(inSelOrder(wria), wTotal), 7, true)}</div>}
-          <LegendRow style={{ marginTop: 5 }} items={seg(sel, total).filter(s => s.pct >= 1).map(s => ({ label: display(s.key), color: s.color }))} />
+          <LegendRow style={{ marginTop: 5 }} items={seg(sel, total).filter(s => s.pct >= 1).map(s => ({ label: legend(s.key), title: display(s.key), color: s.color }))} />
         </div>
       );
     }
@@ -4573,7 +4574,7 @@
                 </div>
                 <AcreStackBar title="Salmon-bearing" attr="salText" sel={sel.sal} wria={g(wriaZone0.sal)} />
                 <AcreStackBar title="Temperature impairment" attr="tempText" sel={sel.temp} wria={g(wriaZone0.temp)} />
-                <AcreStackBar title="Salmon Recovery Zone" attr="srz" display={displaySrz} sel={sel.srz} wria={g(wriaZone0.srz)} />
+                <AcreStackBar title="Salmon Recovery Zone" attr="srz" display={displaySrz} legend={v => v || 'Unknown'} sel={sel.srz} wria={g(wriaZone0.srz)} />
                 <AcreStackBar title="Owner" attr="mgr" sel={sel.mgr} wria={g(wriaZone0.mgr)} />
                 <AcreStackBar title="Zoning" attr="zon" sel={sel.zon} wria={g(wriaZone0.zon)} />
               </div>

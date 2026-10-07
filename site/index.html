@@ -559,7 +559,7 @@ React.createElement(Term, { id: "tier", plain: true }, React.createElement("span
 const LegendRow = ({ items, style, className }) =>
 React.createElement("span", { className: className ? `legend ${className}` : 'legend', style: style },
 items.map((it) =>
-React.createElement("span", { key: it.label },
+React.createElement("span", { key: it.label, title: it.title },
 React.createElement("i", { className: it.hollow ? 'hollow' : it.dash ? 'dash' : it.solid ? 'solid' : it.texture || '',
   style: it.color ? { '--c': it.color } : undefined }),
 it.label
@@ -3344,7 +3344,8 @@ function KLcStack({ rows }) {
 
 }
 
-function AcreStackBar({ sel, wria, title, attr, display = (v) => v }) {
+
+function AcreStackBar({ sel, wria, title, attr, display = (v) => v, legend = display }) {
 
 
 
@@ -3403,7 +3404,7 @@ function AcreStackBar({ sel, wria, title, attr, display = (v) => v }) {
     title: `${display(s.key)}: ${fmtAcres(s.acres)} acres (${s.pct.toFixed(1)}%)${wria ? ` · WRIA ${(wriaPct.get(s.key) || 0).toFixed(1)}%${vsWriaText(s.pct, wriaPct.get(s.key) || 0, ' pts')}` : ''}`,
     style: { display: 'flex', alignItems: 'center', justifyContent: 'center', font: '500 10.5px var(--font-m)',
       color: light(s.color) ? THEME.ink : '#fff', background: s.color, width: `${s.pct}%`, overflow: 'hidden', whiteSpace: 'nowrap' } },
-  (() => {const t = `${display(s.key)} ${s.pct.toFixed(0)}%`;return labelFits(t, s.pct) ? t : '';})()
+  (() => {const t = `${legend(s.key)} ${s.pct.toFixed(0)}%`;return labelFits(t, s.pct) ? t : '';})()
   ))
   );
 
@@ -3428,7 +3429,7 @@ function AcreStackBar({ sel, wria, title, attr, display = (v) => v }) {
     ),
     bar(seg(sel, total), 22, false),
     wria && React.createElement("div", { style: { marginTop: 3 } }, bar(seg(inSelOrder(wria), wTotal), 7, true)),
-    React.createElement(LegendRow, { style: { marginTop: 5 }, items: seg(sel, total).filter((s) => s.pct >= 1).map((s) => ({ label: display(s.key), color: s.color })) })
+    React.createElement(LegendRow, { style: { marginTop: 5 }, items: seg(sel, total).filter((s) => s.pct >= 1).map((s) => ({ label: legend(s.key), title: display(s.key), color: s.color })) })
     ));
 
 }
@@ -4555,7 +4556,7 @@ function SummaryStatsPanel({ data, sharedBidData, appliedFilters, onEditFilters 
     ),
     React.createElement(AcreStackBar, { title: "Salmon-bearing", attr: "salText", sel: sel.sal, wria: g(wriaZone0.sal) }),
     React.createElement(AcreStackBar, { title: "Temperature impairment", attr: "tempText", sel: sel.temp, wria: g(wriaZone0.temp) }),
-    React.createElement(AcreStackBar, { title: "Salmon Recovery Zone", attr: "srz", display: displaySrz, sel: sel.srz, wria: g(wriaZone0.srz) }),
+    React.createElement(AcreStackBar, { title: "Salmon Recovery Zone", attr: "srz", display: displaySrz, legend: (v) => v || 'Unknown', sel: sel.srz, wria: g(wriaZone0.srz) }),
     React.createElement(AcreStackBar, { title: "Owner", attr: "mgr", sel: sel.mgr, wria: g(wriaZone0.mgr) }),
     React.createElement(AcreStackBar, { title: "Zoning", attr: "zon", sel: sel.zon, wria: g(wriaZone0.zon) })
     )
